@@ -1,38 +1,142 @@
 import Papa from 'papaparse';
 import { db, type Category, type Transaction, type Recurring } from '../db/db';
+import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from './format';
 
-export async function exportTransactionsCSV(): Promise<string> {
-  const [txs, cats] = await Promise.all([db.transactions.toArray(), db.categories.toArray()]);
-  const catMap = new Map(cats.map((c) => [c.id, c.name]));
-  let running = 0;
-  const rows = txs
-    .slice()
-    .sort((a, b) => (a.date < b.date ? -1 : 1))
-    .map((t) => {
-      running += t.type === 'income' ? t.amount : -t.amount;
-      return {
-        Date: t.date,
-        Category: catMap.get(t.categoryId) || 'Uncategorized',
-        Merchant: t.merchant || '',
-        'Payment Method': t.paymentMethod || '',
-        Amount: t.amount,
-        'Income/Expense': t.type,
-        'Running Balance': Math.round(running * 100) / 100,
-        Notes: t.note || '',
-        Tags: (t.tags || []).join('|'),
-      };
-    });
-  return Papa.unparse(rows);
+export const SCHEMA_VERSION = 2;
+
+/** Prevents CSV formula injection: a cell starting with =, +, -, or @ gets
+ *  interpreted as a formula by Excel/Sheets when the file is opened. Prefixing
+ *  with a leading apostrophe forces it to be read as literal text instead. */
+function sanitizeCsvCell(v: string): string {
+  if (/^[=+\-@]/.test(v)) return "'" + v;
+  return v;
 }
 
-export async function exportFullBackup(): Promise<string> {
-  const [categories, transactions, recurring, settings] = await Promise.all([
-    db.categories.toArray(),
+async function loadAll() {
+  const [transactions, categories, recurring, settings] = await Promise.all([
     db.transactions.toArray(),
+    db.categories.toArray(),
     db.recurring.toArray(),
     db.settings.toArray(),
   ]);
-  return JSON.stringify({ categories, transactions, recurring, settings, exportedAt: new Date().toISOString() }, null, 2);
+  return { transactions, categories, recurring, settings };
+}
+
+/** Flat, ML/BI-ready transaction records: one row per transaction with every
+ *  date feature a model or Power BI pivot would otherwise have to recompute. */
+function enrichedTransactionRows(transactions: Transaction[], categories: Category[]) {
+  const catMap = new Map(categories.map((c) => [c.id, c]));
+  let running = 0;
+  return transactions
+    .slice()
+    .sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1))
+    .map((t) => {
+      running += t.type === 'income' ? t.amount : -t.amount;
+      const cat = catMap.get(t.categoryId);
+      return {
+        Date: t.date,
+        Year: Number(t.date.slice(0, 4)),
+        Quarter: quarterOf(t.date),
+        Month: monthKey(t.date),
+        Week: isoWeek(t.date),
+        Weekday: weekdayName(t.date),
+        IsWeekend: isWeekend(t.date),
+        CategoryId: t.categoryId,
+        Category: sanitizeCsvCell(cat?.name || 'Uncategorized'),
+        Merchant: sanitizeCsvCell(t.merchant || ''),
+        PaymentMethod: t.paymentMethod || '',
+        Amount: t.amount,
+        Type: t.type,
+        RunningBalance: Math.round(running * 100) / 100,
+        IsRecurring: Boolean(t.recurringId),
+        Notes: sanitizeCsvCell(t.note || ''),
+        Tags: sanitizeCsvCell((t.tags || []).join('|')),
+      };
+    });
+}
+
+export async function exportTransactionsCSV(): Promise<string> {
+  const { transactions, categories } = await loadAll();
+  return Papa.unparse(enrichedTransactionRows(transactions, categories));
+}
+
+/** Dimension table — pairs with the transactions fact table in Power BI via CategoryId. */
+export async function exportCategoriesCSV(): Promise<string> {
+  const { categories } = await loadAll();
+  const rows = categories.map((c) => ({
+    CategoryId: c.id,
+    Name: sanitizeCsvCell(c.name),
+    Icon: c.icon,
+    Color: c.color,
+    MonthlyBudget: c.budget,
+    Archived: Boolean(c.archived),
+  }));
+  return Papa.unparse(rows);
+}
+
+/** Pre-aggregated month x category fact table — the natural grain for a Power BI
+ *  budget-vs-actual report without needing measures computed in DAX. */
+export async function exportMonthlySummaryCSV(): Promise<string> {
+  const { transactions, categories } = await loadAll();
+  const months = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort();
+  const rows: Record<string, string | number | null>[] = [];
+  for (const m of months) {
+    for (const c of categories) {
+      const actual = transactions
+        .filter((t) => t.type === 'expense' && t.categoryId === c.id && monthKey(t.date) === m)
+        .reduce((s, t) => s + t.amount, 0);
+      if (actual === 0 && c.budget === 0) continue;
+      rows.push({
+        Month: m,
+        CategoryId: c.id ?? -1,
+        CategoryName: sanitizeCsvCell(c.name),
+        Budget: c.budget,
+        Actual: Math.round(actual * 100) / 100,
+        Variance: Math.round((c.budget - actual) * 100) / 100,
+        PctOfBudget: c.budget > 0 ? Math.round((actual / c.budget) * 1000) / 10 : null,
+      });
+    }
+  }
+  return Papa.unparse(rows);
+}
+
+/** A single bundled JSON dataset — transactions (enriched), categories, and the
+ *  monthly summary — sized for a Python/pandas ML notebook to load in one shot
+ *  (`pd.json_normalize(data['transactions'])`) without juggling three CSV files. */
+export async function exportMLDatasetJSON(): Promise<string> {
+  const { transactions, categories, recurring, settings } = await loadAll();
+  const s = settings[0];
+  const months = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort();
+  const monthlySummary = months.flatMap((m) =>
+    categories.map((c) => {
+      const actual = transactions
+        .filter((t) => t.type === 'expense' && t.categoryId === c.id && monthKey(t.date) === m)
+        .reduce((s2, t) => s2 + t.amount, 0);
+      return {
+        month: m, categoryId: c.id, categoryName: c.name,
+        budget: c.budget, actual: Math.round(actual * 100) / 100,
+        variance: Math.round((c.budget - actual) * 100) / 100,
+      };
+    })
+  );
+  return JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    currency: s?.currency || '₹',
+    transactions: enrichedTransactionRows(transactions, categories),
+    categories,
+    recurring,
+    monthlySummary,
+  }, null, 2);
+}
+
+export async function exportFullBackup(): Promise<string> {
+  const { categories, transactions, recurring, settings } = await loadAll();
+  return JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
+    categories, transactions, recurring, settings,
+    exportedAt: new Date().toISOString(),
+  }, null, 2);
 }
 
 export async function importFullBackup(json: string) {

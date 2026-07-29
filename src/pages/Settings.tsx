@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Category, type Recurring, type Frequency, updateSettings, type Settings as SettingsType } from '../db/db';
 import { X } from 'lucide-react';
-import { exportFullBackup, exportTransactionsCSV, importFullBackup, downloadFile } from '../lib/csv';
+import {
+  exportFullBackup, exportTransactionsCSV, exportCategoriesCSV, exportMonthlySummaryCSV,
+  exportMLDatasetJSON, importFullBackup, downloadFile,
+} from '../lib/csv';
 import { todayISO } from '../lib/format';
 import { useUIStore } from '../store/useUIStore';
 
@@ -76,6 +79,15 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   }
   async function doExportCSV() {
     downloadFile(`pfos-transactions-${todayISO()}.csv`, await exportTransactionsCSV(), 'text/csv');
+  }
+  async function doExportCategoriesCSV() {
+    downloadFile(`pfos-categories-${todayISO()}.csv`, await exportCategoriesCSV(), 'text/csv');
+  }
+  async function doExportMonthlySummaryCSV() {
+    downloadFile(`pfos-monthly-summary-${todayISO()}.csv`, await exportMonthlySummaryCSV(), 'text/csv');
+  }
+  async function doExportMLDataset() {
+    downloadFile(`pfos-ml-dataset-${todayISO()}.json`, await exportMLDatasetJSON(), 'application/json');
   }
   async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -203,10 +215,21 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <h2>Your data</h2>
           <p className="muted">Stored only in this browser, on this device. Nothing is ever sent to a server — export a backup regularly so you don't lose history if you clear browser data or switch devices.</p>
           <button className="btn secondary" onClick={doExportJSON}>Export backup (.json)</button>
-          <button className="btn secondary" onClick={doExportCSV}>Export transactions (.csv — Power BI ready)</button>
           <label htmlFor="import-file">Restore from backup</label>
           <input id="import-file" type="file" accept="application/json" onChange={onImport} />
           <button className="btn danger" onClick={wipeAll}>Erase all data</button>
+        </div>
+
+        <div className="card">
+          <h2>Analysis exports</h2>
+          <p className="muted">Built for Power BI, Excel, or a Python/pandas notebook — every export is a clean flat table with precomputed date fields (weekday, week, quarter, year), so no reshaping is needed before you build a report or train a model.</p>
+          <button className="btn secondary" onClick={doExportCSV}>Transactions (.csv — fact table)</button>
+          <button className="btn secondary" onClick={doExportCategoriesCSV}>Categories (.csv — dimension table)</button>
+          <button className="btn secondary" onClick={doExportMonthlySummaryCSV}>Monthly budget vs. actual (.csv)</button>
+          <button className="btn secondary" onClick={doExportMLDataset}>Full ML dataset (.json — all tables bundled)</button>
+          <p className="muted" style={{ marginTop: 12 }}>
+            In Power BI: Get Data → Text/CSV for each file, then relate Transactions to Categories on <code>CategoryId</code>. See <code>DATA_SCHEMA.md</code> in the project source for full field definitions.
+          </p>
         </div>
 
         <div className="card">
