@@ -1,0 +1,143 @@
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useNavigate } from 'react-router-dom';
+import { db } from '../db/db';
+import { fmtMoney, monthKey, monthLabel, todayISO, shortDate, daysInMonth, dayOfMonthProgress } from '../lib/format';
+import CategoryRow from '../components/CategoryRow';
+
+export default function Dashboard({ currency }: { currency: string }) {
+  const navigate = useNavigate();
+  const curMonth = monthKey(todayISO());
+
+  const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const categories = allCats.filter((c) => !c.archived);
+  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
+
+  const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
+  const spentTx = monthTx.filter((t) => t.type === 'expense');
+  const incomeTx = monthTx.filter((t) => t.type === 'income');
+
+  const totalBudget = allCats.reduce((s, c) => s + c.budget, 0);
+  const totalSpent = spentTx.reduce((s, t) => s + t.amount, 0);
+  const totalIncome = incomeTx.reduce((s, t) => s + t.amount, 0);
+  const remaining = totalBudget - totalSpent;
+  const savings = totalIncome - totalSpent;
+  const savingsPct = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
+
+  const elapsed = dayOfMonthProgress(curMonth);
+  const totalDays = daysInMonth(curMonth);
+  const dailyAvg = elapsed > 0 ? totalSpent / elapsed : 0;
+  const projected = dailyAvg * totalDays;
+
+  const today = todayISO();
+  const todaySpend = spentTx.filter((t) => t.date === today).reduce((s, t) => s + t.amount, 0);
+
+  const recent = txs
+    .slice()
+    .sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1))
+    .slice(0, 6);
+
+  const catMap = new Map(allCats.map((c) => [c.id, c]));
+
+  const budgetPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
+  const ringColor = budgetPct < 75 ? 'var(--good)' : budgetPct < 100 ? 'var(--warn)' : 'var(--over)';
+
+  return (
+    <>
+      <header className="topbar">
+        <div className="eyebrow">Personal Finance OS</div>
+        <h1>Dashboard</h1>
+        <div className="sub">{monthLabel(curMonth)}</div>
+      </header>
+      <div className="content">
+        <div className="grid-3">
+          <div><div className="label">Income</div><div className="value">{fmtMoney(totalIncome, currency)}</div></div>
+          <div><div className="label">Spent</div><div className="value">{fmtMoney(totalSpent, currency)}</div></div>
+          <div className={remaining < 0 ? 'neg' : 'pos'}><div className="label">Remaining</div><div className="value">{fmtMoney(remaining, currency)}</div></div>
+        </div>
+
+        <div className="card">
+          <h2>Budget health</h2>
+          <div className="ring-wrap">
+            <Ring pct={budgetPct} color={ringColor} />
+            <div className="ring-figs">
+              <div className="big" style={{ color: ringColor }}>{budgetPct.toFixed(0)}%</div>
+              <div className="lbl">of {fmtMoney(totalBudget, currency)} budget used</div>
+              <div className="lbl" style={{ marginTop: 6 }}>
+                Projected month-end spend: <b style={{ color: 'var(--ink)' }}>{fmtMoney(projected, currency)}</b>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2>
+            By category
+            <span className="muted" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{monthLabel(curMonth)}</span>
+          </h2>
+          {(categories ?? []).length === 0 ? (
+            <div className="empty"><div className="glyph">§</div>No categories yet — add one in Settings.</div>
+          ) : (
+            (categories ?? []).map((c) => {
+              const spent = spentTx.filter((t) => t.categoryId === c.id).reduce((s, t) => s + t.amount, 0);
+              return <CategoryRow key={c.id} category={c} spent={spent} currency={currency} onClick={() => navigate('/history?cat=' + c.id)} />;
+            })
+          )}
+        </div>
+
+        <div className="grid-3">
+          <div><div className="label">Today</div><div className="value">{fmtMoney(todaySpend, currency)}</div></div>
+          <div><div className="label">Daily avg</div><div className="value">{fmtMoney(dailyAvg, currency)}</div></div>
+          <div className={savings >= 0 ? 'pos' : 'neg'}><div className="label">Savings</div><div className="value">{savingsPct ? savingsPct.toFixed(0) + '%' : fmtMoney(savings, currency)}</div></div>
+        </div>
+
+        <div className="card">
+          <h2>
+            Recent transactions
+            <button className="btn small secondary" onClick={() => navigate('/history')}>View all</button>
+          </h2>
+          {recent.length === 0 ? (
+            <div className="empty"><div className="glyph">≡</div>No transactions logged yet.</div>
+          ) : (
+            recent.map((t) => {
+              const c = catMap.get(t.categoryId);
+              return (
+                <div className="tx" key={t.id}>
+                  <div className="tx-left">
+                    <div className="tx-icon" style={{ background: (c?.color || '#888') + '26', color: c?.color }}>{c?.icon || '＊'}</div>
+                    <div className="tx-meta">
+                      <div className="tx-cat">{c?.name || 'Uncategorized'}</div>
+                      {t.note && <div className="tx-note">{t.note}</div>}
+                      <div className="tx-date">{shortDate(t.date)}</div>
+                    </div>
+                  </div>
+                  <div className="tx-right">
+                    <span className={'tx-amt' + (t.type === 'income' ? ' income' : '')}>
+                      {t.type === 'income' ? '+' : '−'}{fmtMoney(t.amount, currency)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Ring({ pct, color }: { pct: number; color: string }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.min(pct, 100) / 100) * c;
+  return (
+    <svg width="76" height="76" viewBox="0 0 76 76" style={{ flexShrink: 0 }}>
+      <circle cx="38" cy="38" r={r} fill="none" stroke="var(--line)" strokeWidth="8" />
+      <circle
+        cx="38" cy="38" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={offset}
+        transform="rotate(-90 38 38)"
+        style={{ transition: 'stroke-dashoffset .5s ease' }}
+      />
+    </svg>
+  );
+}
