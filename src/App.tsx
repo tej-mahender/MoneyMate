@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { getSettings, processRecurring, type Settings as SettingsType } from './db/db';
 import { todayISO } from './lib/format';
 import Onboarding from './pages/Onboarding';
@@ -10,6 +11,29 @@ import Analytics from './pages/Analytics';
 import SettingsPage from './pages/Settings';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
+
+function AnimatedRoutes({ settings, onSettingsChange }: { settings: SettingsType; onSettingsChange: (s: SettingsType) => void }) {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Routes location={location}>
+          <Route path="/" element={<Dashboard currency={settings.currency} />} />
+          <Route path="/add" element={<AddTransaction />} />
+          <Route path="/history" element={<History currency={settings.currency} />} />
+          <Route path="/analytics" element={<Analytics currency={settings.currency} />} />
+          <Route path="/settings" element={<SettingsPage settings={settings} onSettingsChange={onSettingsChange} />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 export default function App() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
@@ -37,9 +61,9 @@ export default function App() {
     return (
       <div className="app-shell">
         <div className="content" style={{ paddingTop: 60 }}>
-          <div className="skeleton" style={{ height: 90, marginBottom: 14 }} />
-          <div className="skeleton" style={{ height: 160, marginBottom: 14 }} />
-          <div className="skeleton" style={{ height: 220 }} />
+          <div className="skeleton" style={{ height: 96, marginBottom: 16 }} />
+          <div className="skeleton" style={{ height: 170, marginBottom: 16 }} />
+          <div className="skeleton" style={{ height: 230 }} />
         </div>
       </div>
     );
@@ -52,13 +76,7 @@ export default function App() {
   return (
     <HashRouter>
       <div className="app-shell">
-        <Routes>
-          <Route path="/" element={<Dashboard currency={settings.currency} />} />
-          <Route path="/add" element={<AddTransaction />} />
-          <Route path="/history" element={<History currency={settings.currency} />} />
-          <Route path="/analytics" element={<Analytics currency={settings.currency} />} />
-          <Route path="/settings" element={<SettingsPage settings={settings} onSettingsChange={setSettings} />} />
-        </Routes>
+        <AnimatedRoutes settings={settings} onSettingsChange={setSettings} />
         <BottomNav />
         <Toast />
       </div>

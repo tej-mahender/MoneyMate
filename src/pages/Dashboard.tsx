@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../db/db';
 import { fmtMoney, monthKey, monthLabel, todayISO, shortDate, daysInMonth, dayOfMonthProgress } from '../lib/format';
 import CategoryRow from '../components/CategoryRow';
+import { Wallet, Receipt } from 'lucide-react';
 
 export default function Dashboard({ currency }: { currency: string }) {
   const navigate = useNavigate();
@@ -39,7 +40,9 @@ export default function Dashboard({ currency }: { currency: string }) {
   const catMap = new Map(allCats.map((c) => [c.id, c]));
 
   const budgetPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
-  const ringColor = budgetPct < 75 ? 'var(--good)' : budgetPct < 100 ? 'var(--warn)' : 'var(--over)';
+  const ringState = budgetPct < 75 ? 'good' : budgetPct < 100 ? 'warn' : 'over';
+  const ringColor = `var(--${ringState === 'warn' ? 'gold' : ringState})`;
+
 
   return (
     <>
@@ -58,7 +61,7 @@ export default function Dashboard({ currency }: { currency: string }) {
         <div className="card">
           <h2>Budget health</h2>
           <div className="ring-wrap">
-            <Ring pct={budgetPct} color={ringColor} />
+            <Ring pct={budgetPct} color={ringState} />
             <div className="ring-figs">
               <div className="big" style={{ color: ringColor }}>{budgetPct.toFixed(0)}%</div>
               <div className="lbl">of {fmtMoney(totalBudget, currency)} budget used</div>
@@ -75,7 +78,7 @@ export default function Dashboard({ currency }: { currency: string }) {
             <span className="muted" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{monthLabel(curMonth)}</span>
           </h2>
           {(categories ?? []).length === 0 ? (
-            <div className="empty"><div className="glyph">§</div>No categories yet — add one in Settings.</div>
+            <div className="empty"><div className="glyph"><Wallet size={30} strokeWidth={1.5} /></div>No categories yet — add one in Settings.</div>
           ) : (
             (categories ?? []).map((c) => {
               const spent = spentTx.filter((t) => t.categoryId === c.id).reduce((s, t) => s + t.amount, 0);
@@ -96,7 +99,7 @@ export default function Dashboard({ currency }: { currency: string }) {
             <button className="btn small secondary" onClick={() => navigate('/history')}>View all</button>
           </h2>
           {recent.length === 0 ? (
-            <div className="empty"><div className="glyph">≡</div>No transactions logged yet.</div>
+            <div className="empty"><div className="glyph"><Receipt size={30} strokeWidth={1.5} /></div>No transactions logged yet.</div>
           ) : (
             recent.map((t) => {
               const c = catMap.get(t.categoryId);
@@ -126,17 +129,24 @@ export default function Dashboard({ currency }: { currency: string }) {
 }
 
 function Ring({ pct, color }: { pct: number; color: string }) {
-  const r = 30;
+  const r = 32;
   const c = 2 * Math.PI * r;
   const offset = c - (Math.min(pct, 100) / 100) * c;
+  const gradId = 'ring-grad-' + color.replace(/[^a-z]/gi, '');
   return (
-    <svg width="76" height="76" viewBox="0 0 76 76" style={{ flexShrink: 0 }}>
-      <circle cx="38" cy="38" r={r} fill="none" stroke="var(--line)" strokeWidth="8" />
+    <svg width="80" height="80" viewBox="0 0 80 80" style={{ flexShrink: 0 }}>
+      <defs>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={color === 'over' ? 'var(--rose)' : color === 'warn' ? 'var(--warn)' : 'var(--good)'} />
+          <stop offset="100%" stopColor={color === 'over' ? 'var(--over)' : color === 'warn' ? 'var(--gold)' : 'var(--good)'} />
+        </linearGradient>
+      </defs>
+      <circle cx="40" cy="40" r={r} fill="none" stroke="var(--surface-border-strong)" strokeWidth="8" />
       <circle
-        cx="38" cy="38" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+        cx="40" cy="40" r={r} fill="none" stroke={`url(#${gradId})`} strokeWidth="8" strokeLinecap="round"
         strokeDasharray={c} strokeDashoffset={offset}
-        transform="rotate(-90 38 38)"
-        style={{ transition: 'stroke-dashoffset .5s ease' }}
+        transform="rotate(-90 40 40)"
+        style={{ transition: 'stroke-dashoffset .6s cubic-bezier(.16,1,.3,1)' }}
       />
     </svg>
   );

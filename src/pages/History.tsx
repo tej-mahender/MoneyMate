@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { db, type Transaction } from '../db/db';
 import { fmtMoney, monthKey, monthLabel, shortDate, todayISO } from '../lib/format';
 import { useUIStore } from '../store/useUIStore';
+import { Inbox, X } from 'lucide-react';
 
 export default function History({ currency }: { currency: string }) {
   const [params, setParams] = useSearchParams();
@@ -72,7 +73,7 @@ export default function History({ currency }: { currency: string }) {
           {catFilter && (
             <div className="chip-row">
               <button className="chip active" onClick={() => setParams({})}>
-                {catMap.get(catFilter)?.name || 'Category'} ✕
+                {catMap.get(catFilter)?.name || 'Category'} <X size={12} style={{ display: 'inline', verticalAlign: 'middle' }} />
               </button>
             </div>
           )}
@@ -80,7 +81,7 @@ export default function History({ currency }: { currency: string }) {
 
         <div className="card">
           {filtered.length === 0 ? (
-            <div className="empty"><div className="glyph">≡</div>Nothing here yet.</div>
+            <div className="empty"><div className="glyph"><Inbox size={30} strokeWidth={1.5} /></div>Nothing here yet.</div>
           ) : (
             filtered.map((t) => {
               const c = catMap.get(t.categoryId);
@@ -98,7 +99,7 @@ export default function History({ currency }: { currency: string }) {
                     <span className={'tx-amt' + (t.type === 'income' ? ' income' : '')}>
                       {t.type === 'income' ? '+' : '−'}{fmtMoney(t.amount, currency)}
                     </span>
-                    <button className="icon-btn danger" aria-label="Delete" onClick={() => del(t)}>✕</button>
+                    <button className="icon-btn danger" aria-label="Delete" onClick={() => del(t)}><X size={15} /></button>
                   </div>
                 </div>
               );

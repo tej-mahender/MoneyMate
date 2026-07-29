@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Category, type Recurring, type Frequency, updateSettings, type Settings as SettingsType } from '../db/db';
+import { X } from 'lucide-react';
 import { exportFullBackup, exportTransactionsCSV, importFullBackup, downloadFile } from '../lib/csv';
 import { todayISO } from '../lib/format';
 import { useUIStore } from '../store/useUIStore';
 
-const PALETTE = ['#A9782F', '#3E6B4F', '#3D6B8A', '#B4791E', '#8A4A6B', '#6B4A8A', '#A13E3E', '#2F6E5C'];
+const PALETTE = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#F0A83E', '#FF6B6B', '#6FC98A'];
 
 export default function Settings({ settings, onSettingsChange }: { settings: SettingsType; onSettingsChange: (s: SettingsType) => void }) {
   const showToast = useUIStore((s) => s.showToast);
@@ -115,7 +116,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
               <div className="swatch" style={{ background: c.color + '33', color: c.color }}>{c.icon}</div>
               <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
               <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} />
-              <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}>✕</button>
+              <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}><X size={15} /></button>
             </div>
           ))}
           <button className="btn secondary" onClick={addCat}>+ Add category</button>
@@ -140,7 +141,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
                   </div>
                   <div className="tx-right">
                     <button className="btn small secondary" onClick={() => togglePause(r)}>{r.paused ? 'Resume' : 'Pause'}</button>
-                    <button className="icon-btn danger" onClick={() => deleteRecurring(r.id!)}>✕</button>
+                    <button className="icon-btn danger" onClick={() => deleteRecurring(r.id!)}><X size={15} /></button>
                   </div>
                 </div>
               );

@@ -14,7 +14,6 @@ export default function CategoryRow({
 }) {
   const pct = category.budget > 0 ? (spent / category.budget) * 100 : spent > 0 ? 100 : 0;
   const state = pct < 75 ? 'good' : pct < 100 ? 'warn' : 'over';
-  const color = `var(--${state})`;
   return (
     <div className="cat-row" onClick={onClick}>
       <div className="row-top">
@@ -27,7 +26,7 @@ export default function CategoryRow({
         </span>
       </div>
       <div className="bar-track">
-        <div className="bar-fill" style={{ width: Math.min(pct, 100) + '%', background: color }} />
+        <div className={`bar-fill ${state}`} style={{ width: Math.min(pct, 100) + '%' }} />
       </div>
       <div className="pct-tag" style={{ color: state === 'over' ? 'var(--over)' : undefined }}>
         {pct.toFixed(0)}% used

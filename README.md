@@ -4,10 +4,15 @@ A private, offline-first personal finance tracker. No login, no cloud, no ads, n
 analytics, no subscriptions. Every byte of data stays in this browser's IndexedDB,
 on your device.
 
-This is the base version — dashboard, quick add, transaction history with search,
-analytics (category pie / 6-month trend / budget vs actual), recurring
+This is the base feature set — dashboard, quick add, transaction history with
+search, analytics (category pie / 6-month trend / budget vs actual), recurring
 transactions, and full JSON/CSV backup & export. (Calendar heatmap and the native
-Android home-screen widget were added in v2.)
+Android home-screen widget are v2-only.)
+
+**Visual design:** deep glassmorphic dark theme with a signature gold→rose
+gradient accent, a floating icon tab bar with an animated sliding indicator,
+Fraunces/Plus Jakarta Sans/JetBrains Mono type system (all self-hosted — no
+external font requests), and Framer Motion page transitions.
 
 ## Run it locally (development)
 ```
@@ -38,4 +43,5 @@ any backup from the same screen.
 
 ## Tech stack
 React + TypeScript + Vite, Dexie (IndexedDB), Zustand, Recharts, React Router,
-Framer Motion, vite-plugin-pwa. No backend, no external API calls of any kind.
+Framer Motion, vite-plugin-pwa, Lucide icons, self-hosted Fontsource fonts. No
+backend, no external API/CDN calls of any kind.

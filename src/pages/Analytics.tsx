@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { fmtMoney, monthKey, monthLabel, todayISO } from '../lib/format';
+import { PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -58,13 +59,13 @@ export default function Analytics({ currency }: { currency: string }) {
         <div className="card">
           <h2>Where it went</h2>
           {pieData.length === 0 ? (
-            <div className="empty"><div className="glyph">◔</div>Nothing to chart yet — log a few expenses.</div>
+            <div className="empty"><div className="glyph"><PieChartIcon size={30} strokeWidth={1.5} /></div>Nothing to chart yet — log a few expenses.</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} stroke="var(--bg-card)" strokeWidth={2} />)}
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} stroke="var(--void-elev)" strokeWidth={2} />)}
                   </Pie>
                   <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
                 </PieChart>
@@ -80,7 +81,7 @@ export default function Analytics({ currency }: { currency: string }) {
           <h2>6-month trend</h2>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
               <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={11} />
               <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
               <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
@@ -93,17 +94,17 @@ export default function Analytics({ currency }: { currency: string }) {
         <div className="card">
           <h2>Budget vs actual</h2>
           {budgetVsActual.length === 0 ? (
-            <div className="empty"><div className="glyph">▤</div>Add categories to compare.</div>
+            <div className="empty"><div className="glyph"><BarChart3 size={30} strokeWidth={1.5} /></div>Add categories to compare.</div>
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(160, budgetVsActual.length * 44)}>
               <BarChart data={budgetVsActual} layout="vertical" margin={{ left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" horizontal={false} />
                 <XAxis type="number" stroke="var(--ink-soft)" fontSize={11} />
                 <YAxis type="category" dataKey="name" stroke="var(--ink-soft)" fontSize={11} width={64} />
                 <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="budget" fill="var(--ink-faint)" radius={[0, 4, 4, 0]} name="Budget" />
-                <Bar dataKey="actual" fill="var(--brass)" radius={[0, 4, 4, 0]} name="Actual" />
+                <Bar dataKey="actual" fill="var(--gold)" radius={[0, 4, 4, 0]} name="Actual" />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -114,8 +115,8 @@ export default function Analytics({ currency }: { currency: string }) {
 }
 
 const tooltipStyle = {
-  background: 'var(--bg-elev)',
-  border: '1px solid var(--line)',
+  background: 'var(--void-elev)',
+  border: '1px solid var(--surface-border)',
   borderRadius: 8,
   fontSize: 12,
   color: 'var(--ink)',

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { db, DEFAULT_CATEGORIES, updateSettings } from '../db/db';
+import { Sparkles, X } from 'lucide-react';
 
 const CURRENCIES = ['₹', '$', '€', '£'];
 
 type DraftCat = { name: string; icon: string; color: string; budget: string };
 
-const PALETTE = ['#A9782F', '#3E6B4F', '#3D6B8A', '#B4791E', '#8A4A6B', '#6B4A8A', '#A13E3E', '#2F6E5C'];
+const PALETTE = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#F0A83E', '#FF6B6B', '#6FC98A'];
 
 export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
@@ -47,7 +48,13 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       <div className="content">
         {step === 0 && (
           <div className="onboard-hero">
-            <div className="glyph">§</div>
+            <div className="glyph" style={{
+              width: 72, height: 72, borderRadius: 22, background: 'var(--aurum)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px', boxShadow: 'var(--shadow-glow-gold)',
+            }}>
+              <Sparkles size={32} color="#1A1206" strokeWidth={2} />
+            </div>
             <h1>Your Personal Finance OS</h1>
             <p>
               A private place to track every rupee — no login, no cloud, no ads, no analytics. Everything you enter
@@ -98,7 +105,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                   <div className="swatch" style={{ background: c.color + '33', color: c.color }}>{c.icon}</div>
                   <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
                   <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} />
-                  <button className="icon-btn danger" onClick={() => removeCat(i)} aria-label="Remove">✕</button>
+                  <button className="icon-btn danger" onClick={() => removeCat(i)} aria-label="Remove"><X size={15} /></button>
                 </div>
               ))}
               <button className="btn secondary" onClick={addCat}>+ Add category</button>

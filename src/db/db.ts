@@ -129,12 +129,12 @@ export function advanceDate(iso: string, freq: Frequency): string {
 }
 
 export const DEFAULT_CATEGORIES: Omit<Category, 'id'>[] = [
-  { name: 'Rent', icon: '🏠', color: '#A9782F', budget: 0 },
-  { name: 'Food', icon: '🍲', color: '#3E6B4F', budget: 0 },
-  { name: 'Transport', icon: '🚕', color: '#3D6B8A', budget: 0 },
-  { name: 'Utilities', icon: '💡', color: '#B4791E', budget: 0 },
-  { name: 'Shopping', icon: '🛍️', color: '#8A4A6B', budget: 0 },
-  { name: 'Entertainment', icon: '🎬', color: '#6B4A8A', budget: 0 },
-  { name: 'Medical', icon: '⚕️', color: '#A13E3E', budget: 0 },
-  { name: 'Savings', icon: '💰', color: '#2F6E5C', budget: 0 },
+  { name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 0 },
+  { name: 'Food', icon: '🍲', color: '#6FC98A', budget: 0 },
+  { name: 'Transport', icon: '🚕', color: '#7C93F0', budget: 0 },
+  { name: 'Utilities', icon: '💡', color: '#F0A83E', budget: 0 },
+  { name: 'Shopping', icon: '🛍️', color: '#E8618C', budget: 0 },
+  { name: 'Entertainment', icon: '🎬', color: '#B98CF0', budget: 0 },
+  { name: 'Medical', icon: '⚕️', color: '#FF6B6B', budget: 0 },
+  { name: 'Savings', icon: '💰', color: '#4FD9B8', budget: 0 },
 ];
