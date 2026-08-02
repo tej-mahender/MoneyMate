@@ -1,11 +1,13 @@
+import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../db/db';
 import { fmtMoney, monthKey, monthLabel, todayISO, shortDate, daysInMonth, dayOfMonthProgress } from '../lib/format';
 import CategoryRow from '../components/CategoryRow';
+import { syncWidget } from '../lib/widgetBridge';
 import { Wallet, Receipt } from 'lucide-react';
 
-export default function Dashboard({ currency }: { currency: string }) {
+export default function Dashboard({ currency, monthlyIncome }: { currency: string; monthlyIncome: number }) {
   const navigate = useNavigate();
   const curMonth = monthKey(todayISO());
 
@@ -19,10 +21,16 @@ export default function Dashboard({ currency }: { currency: string }) {
 
   const totalBudget = allCats.reduce((s, c) => s + c.budget, 0);
   const totalSpent = spentTx.reduce((s, t) => s + t.amount, 0);
-  const totalIncome = incomeTx.reduce((s, t) => s + t.amount, 0);
+  // Fixed salary counts automatically every month without needing to be logged as
+  // a transaction; anything logged as income (bonus, freelance) adds on top of it.
+  const loggedIncome = incomeTx.reduce((s, t) => s + t.amount, 0);
+  const totalIncome = monthlyIncome + loggedIncome;
   const remaining = totalBudget - totalSpent;
   const savings = totalIncome - totalSpent;
   const savingsPct = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
+  // Whether to show income/savings at all is a single, predictable decision made
+  // once at onboarding (or later in Settings) — not inferred from behavior.
+  const trackIncome = monthlyIncome > 0;
 
   const elapsed = dayOfMonthProgress(curMonth);
   const totalDays = daysInMonth(curMonth);
@@ -43,6 +51,15 @@ export default function Dashboard({ currency }: { currency: string }) {
   const ringState = budgetPct < 75 ? 'good' : budgetPct < 100 ? 'warn' : 'over';
   const ringColor = `var(--${ringState === 'warn' ? 'gold' : ringState})`;
 
+  useEffect(() => {
+    syncWidget({
+      spent: totalSpent,
+      budget: totalBudget,
+      remaining,
+      currency,
+      monthLabel: monthLabel(curMonth),
+    });
+  }, [totalSpent, totalBudget, remaining, currency, curMonth]);
 
   return (
     <>
@@ -53,7 +70,11 @@ export default function Dashboard({ currency }: { currency: string }) {
       </header>
       <div className="content">
         <div className="grid-3">
-          <div><div className="label">Income</div><div className="value">{fmtMoney(totalIncome, currency)}</div></div>
+          {trackIncome ? (
+            <div><div className="label">Income</div><div className="value">{fmtMoney(totalIncome, currency)}</div></div>
+          ) : (
+            <div><div className="label">Budgeted</div><div className="value">{fmtMoney(totalBudget, currency)}</div></div>
+          )}
           <div><div className="label">Spent</div><div className="value">{fmtMoney(totalSpent, currency)}</div></div>
           <div className={remaining < 0 ? 'neg' : 'pos'}><div className="label">Remaining</div><div className="value">{fmtMoney(remaining, currency)}</div></div>
         </div>
@@ -90,7 +111,11 @@ export default function Dashboard({ currency }: { currency: string }) {
         <div className="grid-3">
           <div><div className="label">Today</div><div className="value">{fmtMoney(todaySpend, currency)}</div></div>
           <div><div className="label">Daily avg</div><div className="value">{fmtMoney(dailyAvg, currency)}</div></div>
-          <div className={savings >= 0 ? 'pos' : 'neg'}><div className="label">Savings</div><div className="value">{savingsPct ? savingsPct.toFixed(0) + '%' : fmtMoney(savings, currency)}</div></div>
+          {trackIncome ? (
+            <div className={savings >= 0 ? 'pos' : 'neg'}><div className="label">Savings</div><div className="value">{savingsPct ? savingsPct.toFixed(0) + '%' : fmtMoney(savings, currency)}</div></div>
+          ) : (
+            <div><div className="label">Days left</div><div className="value">{Math.max(0, totalDays - elapsed)}</div></div>
+          )}
         </div>
 
         <div className="card">

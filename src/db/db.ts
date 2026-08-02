@@ -92,14 +92,25 @@ export async function updateSettings(patch: Partial<Settings>) {
 }
 
 /** Generates due recurring transactions since their nextDate, called once on app load. */
+/** Generates due recurring transactions since their nextDate, called once on app load.
+ *  Builds every new row in memory first, then commits with a single bulkAdd inside one
+ *  Dexie transaction — a prior version awaited db.transactions.add() one row at a time,
+ *  which meant a daily recurring item left unopened for weeks did dozens of sequential
+ *  writes, each re-triggering every live query in the app. That's what caused a slow
+ *  app launch; this version does one write and one live-query refresh regardless of
+ *  how many days of backfill are needed. */
 export async function processRecurring(todayISO: string) {
   const all = await db.recurring.toArray();
   const items = all.filter((r) => !r.paused);
+
+  const newTransactions: Omit<Transaction, 'id'>[] = [];
+  const recurringUpdates: { id: number; nextDate: string }[] = [];
+
   for (const item of items) {
     let cursor = item.nextDate;
     let generated = false;
     while (cursor <= todayISO) {
-      await db.transactions.add({
+      newTransactions.push({
         type: item.type,
         amount: item.amount,
         categoryId: item.categoryId,
@@ -114,9 +125,18 @@ export async function processRecurring(todayISO: string) {
       generated = true;
     }
     if (generated) {
-      await db.recurring.update(item.id!, { nextDate: cursor });
+      recurringUpdates.push({ id: item.id!, nextDate: cursor });
     }
   }
+
+  if (newTransactions.length === 0) return;
+
+  await db.transaction('rw', db.transactions, db.recurring, async () => {
+    await db.transactions.bulkAdd(newTransactions);
+    for (const u of recurringUpdates) {
+      await db.recurring.update(u.id, { nextDate: u.nextDate });
+    }
+  });
 }
 
 export function advanceDate(iso: string, freq: Frequency): string {
@@ -125,7 +145,10 @@ export function advanceDate(iso: string, freq: Frequency): string {
   else if (freq === 'weekly') d.setDate(d.getDate() + 7);
   else if (freq === 'monthly') d.setMonth(d.getMonth() + 1);
   else if (freq === 'yearly') d.setFullYear(d.getFullYear() + 1);
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export const DEFAULT_CATEGORIES: Omit<Category, 'id'>[] = [

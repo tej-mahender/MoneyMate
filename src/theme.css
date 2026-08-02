@@ -205,6 +205,22 @@ input:focus, select:focus, textarea:focus{
 .cat-edit-row{ display:flex; gap:9px; align-items:center; padding:10px 0; border-bottom:1px solid var(--surface-border); }
 .cat-edit-row input[type=text]{ flex:2; } .cat-edit-row input[type=number]{ flex:1; }
 .swatch{ width:36px; height:36px; border-radius:11px; border:1px solid var(--surface-border); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:17px; }
+.icon-picker-panel{
+  position:absolute; top:calc(100% + 8px); left:0; z-index:50; width:264px;
+  background:var(--void-elev); border:1px solid var(--surface-border-strong); border-radius:16px;
+  padding:14px; box-shadow:0 20px 40px -12px rgba(0,0,0,0.6);
+  backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur);
+  overflow:hidden;
+}
+.icon-picker-colors{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.icon-picker-color-dot{ width:24px; height:24px; border-radius:50%; border:1px solid var(--surface-border); cursor:pointer; padding:0; }
+.icon-picker-grid{ display:grid; grid-template-columns:repeat(8,1fr); gap:4px; }
+.icon-picker-emoji{
+  background:none; border:1px solid transparent; border-radius:9px; font-size:17px;
+  padding:6px 0; cursor:pointer; transition:background .12s;
+}
+.icon-picker-emoji:hover{ background:var(--surface-strong); }
+.icon-picker-emoji.selected{ background:var(--aurum-soft); border-color:var(--gold); }
 .icon-btn{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:7px; display:flex; align-items:center; justify-content:center; border-radius:9px; transition:background .15s,color .15s; }
 .icon-btn:hover{ background:var(--surface-strong); color:var(--ink); }
 .icon-btn.danger:hover{ background:var(--over-bg); color:var(--over); }
@@ -258,7 +274,8 @@ input:focus, select:focus, textarea:focus{
 }
 
 .fab{
-  position:fixed; right:50%; transform:translateX(210px);
+  position:fixed;
+  right: max(20px, calc((100vw - 520px) / 2 + 20px));
   bottom: calc(94px + env(safe-area-inset-bottom) + 12px);
   width:58px; height:58px; border-radius:19px;
   background:var(--aurum);
@@ -266,10 +283,7 @@ input:focus, select:focus, textarea:focus{
   box-shadow: var(--shadow-glow-gold), 0 12px 28px -8px rgba(0,0,0,0.5);
   z-index:35;
   display:flex; align-items:center; justify-content:center;
-  transition:transform .15s cubic-bezier(.34,1.56,.64,1);
 }
-.fab:active{ transform: translateX(210px) scale(0.9); }
-@media (max-width:520px){ .fab, .fab:active{ transform:none; right:22px; } .fab:active{ transform:scale(0.9); } }
 
 .toast{
   position:fixed; bottom:108px; left:50%; transform:translateX(-50%);

@@ -1,5 +1,18 @@
+/** Formats a Date using its LOCAL calendar fields, never converting through UTC.
+ *  Using .toISOString() here would be wrong: it converts to UTC first, which
+ *  silently rolls back to the previous day/month for any timezone ahead of UTC
+ *  (e.g. IST, UTC+5:30) whenever the local time is near midnight. That bug was
+ *  causing addMonths() to sometimes fail to advance at all, which froze the
+ *  Analytics page in an infinite while loop. */
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalDateStr(new Date());
 }
 
 export function monthKey(iso: string): string {
@@ -68,7 +81,9 @@ export function isoWeek(iso: string): number {
 export function addMonths(key: string, n: number): string {
   const [y, m] = key.split('-').map(Number);
   const d = new Date(y, m - 1 + n, 1);
-  return d.toISOString().slice(0, 7);
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yy}-${mm}`;
 }
 
 /** Difference in whole days between two ISO dates (b - a). */

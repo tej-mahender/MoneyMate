@@ -11,6 +11,7 @@ import Analytics from './pages/Analytics';
 import SettingsPage from './pages/Settings';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function AnimatedRoutes({ settings, onSettingsChange }: { settings: SettingsType; onSettingsChange: (s: SettingsType) => void }) {
   const location = useLocation();
@@ -23,13 +24,17 @@ function AnimatedRoutes({ settings, onSettingsChange }: { settings: SettingsType
         exit={{ opacity: 0, y: -6 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       >
-        <Routes location={location}>
-          <Route path="/" element={<Dashboard currency={settings.currency} />} />
-          <Route path="/add" element={<AddTransaction />} />
-          <Route path="/history" element={<History currency={settings.currency} />} />
-          <Route path="/analytics" element={<Analytics currency={settings.currency} />} />
-          <Route path="/settings" element={<SettingsPage settings={settings} onSettingsChange={onSettingsChange} />} />
-        </Routes>
+        {/* Keyed by path so a crash on one screen resets automatically when you
+            navigate away, instead of needing a full app reload to recover. */}
+        <ErrorBoundary key={location.pathname}>
+          <Routes location={location}>
+            <Route path="/" element={<Dashboard currency={settings.currency} monthlyIncome={settings.monthlyIncome} />} />
+            <Route path="/add" element={<AddTransaction />} />
+            <Route path="/history" element={<History currency={settings.currency} />} />
+            <Route path="/analytics" element={<Analytics currency={settings.currency} />} />
+            <Route path="/settings" element={<SettingsPage settings={settings} onSettingsChange={onSettingsChange} />} />
+          </Routes>
+        </ErrorBoundary>
       </motion.div>
     </AnimatePresence>
   );

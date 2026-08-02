@@ -4,7 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import { db, type Transaction } from '../db/db';
 import { fmtMoney, monthKey, monthLabel, shortDate, todayISO } from '../lib/format';
 import { useUIStore } from '../store/useUIStore';
-import { Inbox, X } from 'lucide-react';
+import CalendarHeatmap from '../components/CalendarHeatmap';
+import { List, CalendarDays, Inbox, X } from 'lucide-react';
 
 export default function History({ currency }: { currency: string }) {
   const [params, setParams] = useSearchParams();
@@ -15,6 +16,8 @@ export default function History({ currency }: { currency: string }) {
 
   const [month, setMonth] = useState(monthKey(todayISO()));
   const [query, setQuery] = useState('');
+  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [dayFilter, setDayFilter] = useState<string | null>(null);
   const catFilter = params.get('cat') ? Number(params.get('cat')) : null;
   const [lastDeleted, setLastDeleted] = useState<Transaction | null>(null);
 
@@ -27,6 +30,7 @@ export default function History({ currency }: { currency: string }) {
   const filtered = allTx
     .filter((t) => monthKey(t.date) === month)
     .filter((t) => (catFilter ? t.categoryId === catFilter : true))
+    .filter((t) => (dayFilter ? t.date === dayFilter : true))
     .filter((t) => {
       if (!query.trim()) return true;
       const q = query.toLowerCase();
@@ -65,10 +69,18 @@ export default function History({ currency }: { currency: string }) {
       <div className="content">
         <div className="card">
           <div className="row2">
-            <select value={month} onChange={(e) => setMonth(e.target.value)}>
+            <select value={month} onChange={(e) => { setMonth(e.target.value); setDayFilter(null); }}>
               {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
             </select>
             <input type="text" placeholder="Search…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+          <div className="chip-row">
+            <button className={'chip' + (view === 'list' ? ' active' : '')} onClick={() => setView('list')}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><List size={13} /> List</span>
+            </button>
+            <button className={'chip' + (view === 'calendar' ? ' active' : '')} onClick={() => setView('calendar')}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><CalendarDays size={13} /> Calendar</span>
+            </button>
           </div>
           {catFilter && (
             <div className="chip-row">
@@ -77,7 +89,19 @@ export default function History({ currency }: { currency: string }) {
               </button>
             </div>
           )}
+          {dayFilter && (
+            <div className="chip-row">
+              <button className="chip active" onClick={() => setDayFilter(null)}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{dayFilter} <X size={12} /></span></button>
+            </div>
+          )}
         </div>
+
+        {view === 'calendar' && (
+          <div className="card">
+            <h2>Spending heatmap</h2>
+            <CalendarHeatmap month={month} transactions={allTx} currency={currency} onSelectDay={setDayFilter} />
+          </div>
+        )}
 
         <div className="card">
           {filtered.length === 0 ? (

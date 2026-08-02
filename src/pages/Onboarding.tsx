@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { db, DEFAULT_CATEGORIES, updateSettings } from '../db/db';
 import { Sparkles, X } from 'lucide-react';
+import IconPicker from '../components/IconPicker';
 
 const CURRENCIES = ['₹', '$', '€', '£'];
 
@@ -85,6 +86,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               </div>
               <label htmlFor="income">Monthly income (optional)</label>
               <input id="income" type="number" inputMode="decimal" placeholder="0.00" value={income} onChange={(e) => setIncome(e.target.value)} />
+              <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+                {Number(income) > 0
+                  ? 'Savings will be tracked automatically each month, alongside your category budgets.'
+                  : 'Leave this blank if you\u2019d rather just track spending against your category budgets — that\u2019s a common way to use this app, and nothing forces you to log income.'}
+              </p>
               <button className="btn" onClick={() => setStep(2)}>Continue</button>
               <button className="btn ghost" onClick={() => setStep(0)}>Back</button>
             </div>
@@ -102,7 +108,13 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               <h2>Categories</h2>
               {cats.map((c, i) => (
                 <div className="cat-edit-row" key={i}>
-                  <div className="swatch" style={{ background: c.color + '33', color: c.color }}>{c.icon}</div>
+                  <IconPicker
+                    icon={c.icon}
+                    color={c.color}
+                    palette={PALETTE}
+                    onIconChange={(icon) => updateCat(i, 'icon', icon)}
+                    onColorChange={(color) => updateCat(i, 'color', color)}
+                  />
                   <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
                   <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} />
                   <button className="icon-btn danger" onClick={() => removeCat(i)} aria-label="Remove"><X size={15} /></button>

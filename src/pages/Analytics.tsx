@@ -111,7 +111,10 @@ export default function Analytics({ currency }: { currency: string }) {
         days.push(cursor);
         const d = new Date(cursor + 'T00:00:00');
         d.setDate(d.getDate() + 1);
-        cursor = d.toISOString().slice(0, 10);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        cursor = `${y}-${m}-${day}`;
       }
       return days.map((d, i) => {
         const windowStart = Math.max(0, i - 6);
@@ -292,15 +295,7 @@ export default function Analytics({ currency }: { currency: string }) {
               <XAxis dataKey="day" stroke="var(--ink-soft)" fontSize={11} />
               <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
               <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
-              <Bar dataKey="total" radius={[6, 6, 0, 0]}>
-                {weekdayData.map((_, i) => <Cell key={i} fill="url(#weekdayGrad)" />)}
-              </Bar>
-              <defs>
-                <linearGradient id="weekdayGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--gold)" />
-                  <stop offset="100%" stopColor="var(--rose)" />
-                </linearGradient>
-              </defs>
+              <Bar dataKey="total" fill="var(--gold)" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

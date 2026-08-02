@@ -8,6 +8,7 @@ import {
 } from '../lib/csv';
 import { todayISO } from '../lib/format';
 import { useUIStore } from '../store/useUIStore';
+import IconPicker from '../components/IconPicker';
 
 const PALETTE = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#F0A83E', '#FF6B6B', '#6FC98A'];
 
@@ -64,6 +65,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   }
 
   // Preferences
+  const [incomeDraft, setIncomeDraft] = useState(String(settings.monthlyIncome || ''));
   async function setCurrency(c: string) {
     const next = await updateSettings({ currency: c });
     onSettingsChange(next);
@@ -71,6 +73,12 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   async function setTheme(t: SettingsType['theme']) {
     const next = await updateSettings({ theme: t });
     onSettingsChange(next);
+  }
+  async function saveIncome() {
+    const val = parseFloat(incomeDraft) || 0;
+    const next = await updateSettings({ monthlyIncome: val });
+    onSettingsChange(next);
+    showToast(val > 0 ? 'Income tracking is on.' : 'Income tracking is off — dashboard shows budget only.');
   }
 
   // Data management
@@ -125,7 +133,13 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <h2>Categories &amp; budgets</h2>
           {draftCats.map((c, i) => (
             <div className="cat-edit-row" key={c.id ?? 'new-' + i}>
-              <div className="swatch" style={{ background: c.color + '33', color: c.color }}>{c.icon}</div>
+              <IconPicker
+                icon={c.icon}
+                color={c.color}
+                palette={PALETTE}
+                onIconChange={(icon) => updateCat(i, 'icon', icon)}
+                onColorChange={(color) => updateCat(i, 'color', color)}
+              />
               <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
               <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} />
               <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}><X size={15} /></button>
@@ -209,6 +223,14 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
               <button key={t} className={'chip' + (settings.theme === t ? ' active' : '')} onClick={() => setTheme(t)}>{t}</button>
             ))}
           </div>
+          <label htmlFor="monthly-income">Monthly income</label>
+          <input id="monthly-income" type="number" inputMode="decimal" placeholder="0.00" value={incomeDraft} onChange={(e) => setIncomeDraft(e.target.value)} />
+          <p className="muted" style={{ marginTop: 8 }}>
+            {Number(incomeDraft) > 0
+              ? 'The dashboard tracks income vs. spend and shows savings. Your fixed income counts automatically each month — you don\u2019t need to log it as a transaction.'
+              : 'Left at 0, the dashboard shows only your category budgets — no income or savings tracking. Set an amount if you want savings tracked alongside your spending.'}
+          </p>
+          <button className="btn secondary" onClick={saveIncome}>Save income</button>
         </div>
 
         <div className="card">
