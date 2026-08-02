@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.pfos.app',
-  appName: 'Personal Finance OS',
+  appName: 'Money Mate',
   webDir: 'dist'
 };
 

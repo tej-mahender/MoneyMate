@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
       manifest: {
-        name: 'Personal Finance OS',
-        short_name: 'Finance OS',
+        name: 'Money Mate',
+        short_name: 'Money Mate',
         description: 'A private, offline-first personal finance tracker. Your data never leaves your device.',
         theme_color: '#14171A',
         background_color: '#14171A',

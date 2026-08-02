@@ -35,7 +35,7 @@ public class BalanceWidgetProvider extends AppWidgetProvider {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.balance_widget);
 
             if (!hasData) {
-                views.setTextViewText(R.id.widget_title, "Finance OS");
+                views.setTextViewText(R.id.widget_title, "Money Mate");
                 views.setTextViewText(R.id.widget_amount, "Open app to sync");
                 views.setTextViewText(R.id.widget_sub, "No data yet");
                 views.setProgressBar(R.id.widget_progress, 100, 0, false);

@@ -64,7 +64,7 @@ export default function Dashboard({ currency, monthlyIncome }: { currency: strin
   return (
     <>
       <header className="topbar">
-        <div className="eyebrow">Personal Finance OS</div>
+        <div className="eyebrow">Money Mate</div>
         <h1>Dashboard</h1>
         <div className="sub">{monthLabel(curMonth)}</div>
       </header>

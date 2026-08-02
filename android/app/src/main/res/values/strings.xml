@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Personal Finance OS</string>
-    <string name="title_activity_main">Personal Finance OS</string>
+    <string name="app_name">Money Mate</string>
+    <string name="title_activity_main">Money Mate</string>
     <string name="package_name">com.pfos.app</string>
     <string name="custom_url_scheme">com.pfos.app</string>
     <string name="widget_description">Glanceable monthly balance — spent, budget, and what\'s left, right from your home screen.</string>

@@ -256,7 +256,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
 
         <div className="card">
           <h2>About</h2>
-          <p className="muted">Personal Finance OS — zero login, zero ads, zero subscription, zero analytics, zero tracking. Installable to your home screen and fully usable offline.</p>
+          <p className="muted">Money Mate — zero login, zero ads, zero subscription, zero analytics, zero tracking. Installable to your home screen and fully usable offline.</p>
         </div>
       </div>
     </>
