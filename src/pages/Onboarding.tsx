@@ -49,60 +49,103 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       <div className="content">
         {step === 0 && (
           <div className="onboard-hero">
-            <div className="glyph" style={{
-              width: 72, height: 72, borderRadius: 22, background: 'var(--aurum)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 16px', boxShadow: 'var(--shadow-glow-gold)',
-            }}>
+            <div
+              className="glyph"
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 22,
+                background: "var(--aurum)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+                boxShadow: "var(--shadow-glow-gold)",
+              }}
+            >
               <Sparkles size={32} color="#1A1206" strokeWidth={2} />
             </div>
-            <h1>Your Personal Finance OS</h1>
+            <h1>Welcome to MoneyMate</h1>
             <p>
-              A private place to track every rupee — no login, no cloud, no ads, no analytics. Everything you enter
-              stays on this device, in this browser, forever under your control.
+              A private place to track every rupee — no login, no cloud, no ads,
+              no analytics. Everything you enter stays on this device, in this
+              browser, forever under your control.
             </p>
             <div className="onboard-steps">
-              <span className="active" /><span /><span />
+              <span className="active" />
+              <span />
+              <span />
             </div>
-            <button className="btn" onClick={() => setStep(1)}>Get started</button>
+            <button className="btn" onClick={() => setStep(1)}>
+              Get started
+            </button>
           </div>
         )}
 
         {step === 1 && (
           <>
-            <div className="onboard-hero" style={{ padding: '30px 8px 4px' }}>
+            <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
               <h1 style={{ fontSize: 21 }}>A little context</h1>
-              <p>Currency and monthly income — both optional to change later in Settings.</p>
-              <div className="onboard-steps"><span /><span className="active" /><span /></div>
+              <p>
+                Currency and monthly income — both optional to change later in
+                Settings.
+              </p>
+              <div className="onboard-steps">
+                <span />
+                <span className="active" />
+                <span />
+              </div>
             </div>
             <div className="card">
               <h2>Currency</h2>
               <div className="chip-row">
                 {CURRENCIES.map((c) => (
-                  <button key={c} className={'chip' + (currency === c ? ' active' : '')} onClick={() => setCurrency(c)}>
+                  <button
+                    key={c}
+                    className={"chip" + (currency === c ? " active" : "")}
+                    onClick={() => setCurrency(c)}
+                  >
                     {c}
                   </button>
                 ))}
               </div>
               <label htmlFor="income">Monthly income (optional)</label>
-              <input id="income" type="number" inputMode="decimal" placeholder="0.00" value={income} onChange={(e) => setIncome(e.target.value)} />
+              <input
+                id="income"
+                type="number"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={income}
+                onChange={(e) => setIncome(e.target.value)}
+              />
               <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
                 {Number(income) > 0
-                  ? 'Savings will be tracked automatically each month, alongside your category budgets.'
-                  : 'Leave this blank if you\u2019d rather just track spending against your category budgets — that\u2019s a common way to use this app, and nothing forces you to log income.'}
+                  ? "Savings will be tracked automatically each month, alongside your category budgets."
+                  : "Leave this blank if you\u2019d rather just track spending against your category budgets — that\u2019s a common way to use this app, and nothing forces you to log income."}
               </p>
-              <button className="btn" onClick={() => setStep(2)}>Continue</button>
-              <button className="btn ghost" onClick={() => setStep(0)}>Back</button>
+              <button className="btn" onClick={() => setStep(2)}>
+                Continue
+              </button>
+              <button className="btn ghost" onClick={() => setStep(0)}>
+                Back
+              </button>
             </div>
           </>
         )}
 
         {step === 2 && (
           <>
-            <div className="onboard-hero" style={{ padding: '30px 8px 4px' }}>
+            <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
               <h1 style={{ fontSize: 21 }}>Set your budgets</h1>
-              <p>Add each category you spend on and a monthly cap. You can change these anytime.</p>
-              <div className="onboard-steps"><span /><span /><span className="active" /></div>
+              <p>
+                Add each category you spend on and a monthly cap. You can change
+                these anytime.
+              </p>
+              <div className="onboard-steps">
+                <span />
+                <span />
+                <span className="active" />
+              </div>
             </div>
             <div className="card">
               <h2>Categories</h2>
@@ -112,17 +155,39 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                     icon={c.icon}
                     color={c.color}
                     palette={PALETTE}
-                    onIconChange={(icon) => updateCat(i, 'icon', icon)}
-                    onColorChange={(color) => updateCat(i, 'color', color)}
+                    onIconChange={(icon) => updateCat(i, "icon", icon)}
+                    onColorChange={(color) => updateCat(i, "color", color)}
                   />
-                  <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
-                  <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} />
-                  <button className="icon-btn danger" onClick={() => removeCat(i)} aria-label="Remove"><X size={15} /></button>
+                  <input
+                    type="text"
+                    placeholder="Category"
+                    value={c.name}
+                    onChange={(e) => updateCat(i, "name", e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Budget"
+                    value={c.budget}
+                    onChange={(e) => updateCat(i, "budget", e.target.value)}
+                  />
+                  <button
+                    className="icon-btn danger"
+                    onClick={() => removeCat(i)}
+                    aria-label="Remove"
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
               ))}
-              <button className="btn secondary" onClick={addCat}>+ Add category</button>
-              <button className="btn" disabled={saving} onClick={finish}>{saving ? 'Setting up…' : 'Start tracking'}</button>
-              <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
+              <button className="btn secondary" onClick={addCat}>
+                + Add category
+              </button>
+              <button className="btn" disabled={saving} onClick={finish}>
+                {saving ? "Setting up…" : "Start tracking"}
+              </button>
+              <button className="btn ghost" onClick={() => setStep(1)}>
+                Back
+              </button>
             </div>
           </>
         )}
