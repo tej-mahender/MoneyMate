@@ -35,7 +35,7 @@ export default function Dashboard({ currency, monthlyIncome }: { currency: strin
   const elapsed = dayOfMonthProgress(curMonth);
   const totalDays = daysInMonth(curMonth);
   const dailyAvg = elapsed > 0 ? totalSpent / elapsed : 0;
-  const projected = dailyAvg * totalDays;
+  // const projected = dailyAvg * totalDays;
 
   const today = todayISO();
   const todaySpend = spentTx.filter((t) => t.date === today).reduce((s, t) => s + t.amount, 0);
@@ -86,9 +86,9 @@ export default function Dashboard({ currency, monthlyIncome }: { currency: strin
             <div className="ring-figs">
               <div className="big" style={{ color: ringColor }}>{budgetPct.toFixed(0)}%</div>
               <div className="lbl">of {fmtMoney(totalBudget, currency)} budget used</div>
-              <div className="lbl" style={{ marginTop: 6 }}>
+              {/* <div className="lbl" style={{ marginTop: 6 }}>
                 Projected month-end spend: <b style={{ color: 'var(--ink)' }}>{fmtMoney(projected, currency)}</b>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
