@@ -1,67 +1,76 @@
 :root, [data-theme="dark"] {
-  /* Backgrounds */
-  --void:#071B16;
-  --void-elev:#0B2822;
-  --surface:rgba(255,255,255,.05);
-  --surface-strong:rgba(255,255,255,.08);
-  --surface-border:rgba(15,157,112,.16);
-  --surface-border-strong:rgba(15,157,112,.28);
+  /* Base — near-black with a whisper of teal, sampled from the splash background (~#002220–#012526) */
+  --void: #041412;
+  --void-elev: #0A1E19;
+  --surface: rgba(255,255,255,0.045);
+  --surface-strong: rgba(255,255,255,0.075);
+  --surface-border: rgba(255,255,255,0.09);
+  --surface-border-strong: rgba(255,255,255,0.16);
 
-  --ink:#F8FAFC;
-  --ink-soft:#CBD5E1;
-  --ink-faint:#94A3B8;
+  /* Ink */
+  --ink: #F2F7F5;
+  --ink-soft: #9FB3AE;
+  --ink-faint: #5C6F6A;
 
-  --primary:#0F9D70;
-  --primary-dark:#0A5C47;
-  --primary-light:#34D399;
-  --accent:#4ADE80;
+  /* "Money" signature gradient + solids — sampled directly from the icon mark
+     (--gold/--rose/--aurum names kept as-is for drop-in compatibility with
+     every component that references them; only the values changed) */
+  --gold: #56F29A;
+  --rose: #02916D;
+  --aurum: linear-gradient(135deg, var(--gold) 0%, var(--rose) 100%);
+  --aurum-soft: linear-gradient(135deg, rgba(86,242,154,0.16) 0%, rgba(2,145,109,0.16) 100%);
 
-  --brand:linear-gradient(135deg,#0F9D70 0%,#0A5C47 100%);
-  --brand-soft:linear-gradient(135deg,rgba(15,157,112,.18),rgba(10,92,71,.18));
+  /* Semantic — "good" deliberately shifted off the brand hue (true green,
+     ~142°) vs. the brand's teal-emerald (~165°), so a status color doesn't
+     read as identical to brand chrome. Warn/over unchanged — already
+     maximally distant from green, which matters more now, not less. */
+  --good: #22C55E;
+  --good-bg: rgba(34,197,94,0.12);
+  --warn: #F0A83E;
+  --warn-bg: rgba(240,168,62,0.12);
+  --over: #FF6B6B;
+  --over-bg: rgba(255,107,107,0.12);
 
-  --good:#22C55E;
-  --good-bg:rgba(34,197,94,.12);
-  --warn:#F59E0B;
-  --warn-bg:rgba(245,158,11,.12);
-  --over:#EF4444;
-  --over-bg:rgba(239,68,68,.12);
+  /* Type — unchanged; see handoff notes on the wordmark's rounded sans not
+     matching the current editorial serif. Deliberately not swapped here. */
+  --display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  --sans: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  --display:"Fraunces Variable","Fraunces",Georgia,serif;
-  --sans:"Plus Jakarta Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
-  --mono:"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
-
-  --shadow-card:0 1px 0 rgba(255,255,255,.04) inset,0 20px 40px -16px rgba(0,0,0,.55);
-  --shadow-glow:0 10px 28px -8px rgba(15,157,112,.45);
-  --glass-blur:blur(20px) saturate(160%);
-  color-scheme:dark;
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 20px 40px -16px rgba(0,0,0,0.55);
+  --shadow-glow-gold: 0 8px 24px -6px rgba(86,242,154,0.45);
+  --glass-blur: blur(20px) saturate(150%);
+  color-scheme: dark;
 }
 
-[data-theme="light"]{
-  --void:#F8FAFC;
-  --void-elev:#FFFFFF;
-  --surface:rgba(255,255,255,.75);
-  --surface-strong:rgba(255,255,255,.92);
-  --surface-border:rgba(15,157,112,.10);
-  --surface-border-strong:rgba(15,157,112,.20);
-  --ink:#111827;
-  --ink-soft:#6B7280;
-  --ink-faint:#9CA3AF;
-  --primary:#0F9D70;
-  --primary-dark:#0A5C47;
-  --primary-light:#34D399;
-  --accent:#4ADE80;
-  --brand:linear-gradient(135deg,#0F9D70 0%,#0A5C47 100%);
-  --brand-soft:linear-gradient(135deg,rgba(15,157,112,.10),rgba(10,92,71,.10));
-  --good:#16A34A;
-  --good-bg:rgba(22,163,74,.10);
-  --warn:#D97706;
-  --warn-bg:rgba(217,119,6,.10);
-  --over:#DC2626;
-  --over-bg:rgba(220,38,38,.10);
-  --shadow-card:0 1px 0 rgba(255,255,255,.6) inset,0 16px 32px -18px rgba(15,157,112,.12);
-  --shadow-glow:0 8px 24px -10px rgba(15,157,112,.28);
-  --glass-blur:blur(16px) saturate(150%);
-  color-scheme:light;
+[data-theme="light"] {
+  --void: #F4FAF7;
+  --void-elev: #FFFFFF;
+  --surface: rgba(255,255,255,0.6);
+  --surface-strong: rgba(255,255,255,0.85);
+  --surface-border: rgba(11,31,27,0.08);
+  --surface-border-strong: rgba(11,31,27,0.14);
+
+  --ink: #0B1F1B;
+  --ink-soft: #5C736C;
+  --ink-faint: #96A69F;
+
+  --gold: #34C97F;
+  --rose: #027A5C;
+  --aurum: linear-gradient(135deg, var(--gold) 0%, var(--rose) 100%);
+  --aurum-soft: linear-gradient(135deg, rgba(52,201,127,0.12) 0%, rgba(2,122,92,0.12) 100%);
+
+  --good: #16A34A;
+  --good-bg: rgba(22,163,74,0.10);
+  --warn: #B3781E;
+  --warn-bg: rgba(179,120,30,0.10);
+  --over: #C0433F;
+  --over-bg: rgba(192,67,63,0.10);
+
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.6) inset, 0 16px 32px -18px rgba(11,31,27,0.18);
+  --shadow-glow-gold: 0 8px 20px -8px rgba(2,122,92,0.30);
+  --glass-blur: blur(16px) saturate(140%);
+  color-scheme: light;
 }
 
 *{ box-sizing:border-box; }
@@ -82,10 +91,10 @@ body{
 }
 button, input, select, textarea{ font-family:inherit; }
 a{ color:inherit; }
-::selection{ background: var(--primary-dark); color:#fff; }
+::selection{ background: var(--rose); color:#fff; }
 
 button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--gold);
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -111,7 +120,7 @@ button:focus:not(:focus-visible){ outline:none; }
 }
 .topbar .eyebrow{
   font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
-  background:var(--brand); -webkit-background-clip:text; background-clip:text; color:transparent;
+  background:var(--aurum); -webkit-background-clip:text; background-clip:text; color:transparent;
   font-weight:700; margin-bottom:6px; display:inline-block;
 }
 .topbar h1{ font-family:var(--display); font-optical-sizing:auto; font-size:29px; margin:0; font-weight:600; letter-spacing:-0.01em; }
@@ -163,8 +172,8 @@ button:focus:not(:focus-visible){ outline:none; }
 .bar-track{ height:8px; background:var(--surface-strong); border-radius:6px; overflow:hidden; border:1px solid var(--surface-border); }
 .bar-fill{ height:100%; border-radius:6px; transition:width .5s cubic-bezier(.16,1,.3,1); }
 .bar-fill.good{ background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 70%, white)); }
-.bar-fill.warn{ background: linear-gradient(90deg, var(--warn), var(--primary)); }
-.bar-fill.over{ background: linear-gradient(90deg, var(--primary-dark), var(--over)); }
+.bar-fill.warn{ background: linear-gradient(90deg, var(--warn), var(--gold)); }
+.bar-fill.over{ background: linear-gradient(90deg, var(--rose), var(--over)); }
 .pct-tag{ font-family:var(--mono); font-size:10.5px; margin-top:6px; color:var(--ink-soft); }
 
 label{ display:block; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-faint); margin:15px 0 7px; font-weight:700; }
@@ -176,7 +185,7 @@ input[type=text], input[type=number], input[type=date], input[type=time], select
 }
 input:focus, select:focus, textarea:focus{
   outline:none; border-color:transparent;
-  box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--primary);
+  box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
 }
 .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
@@ -184,8 +193,8 @@ input:focus, select:focus, textarea:focus{
   display:inline-flex; align-items:center; justify-content:center; gap:7px; width:100%;
   font-family:var(--sans); font-size:14.5px; font-weight:700;
   padding:15px 18px; border-radius:15px; border:none;
-  background:var(--brand); color:#1A1206; cursor:pointer; margin-top:18px;
-  box-shadow:var(--shadow-glow);
+  background:var(--aurum); color:#02291D; cursor:pointer; margin-top:18px;
+  box-shadow:var(--shadow-glow-gold);
   transition:transform .12s ease, box-shadow .12s ease, filter .15s ease;
 }
 .btn:hover{ filter:brightness(1.05); }
@@ -217,7 +226,7 @@ input:focus, select:focus, textarea:focus{
   padding:6px 0; cursor:pointer; transition:background .12s;
 }
 .icon-picker-emoji:hover{ background:var(--surface-strong); }
-.icon-picker-emoji.selected{ background:var(--brand-soft); border-color:var(--primary); }
+.icon-picker-emoji.selected{ background:var(--aurum-soft); border-color:var(--gold); }
 .icon-btn{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:7px; display:flex; align-items:center; justify-content:center; border-radius:9px; transition:background .15s,color .15s; }
 .icon-btn:hover{ background:var(--surface-strong); color:var(--ink); }
 .icon-btn.danger:hover{ background:var(--over-bg); color:var(--over); }
@@ -243,7 +252,7 @@ input:focus, select:focus, textarea:focus{
   border:1px solid var(--surface-border-strong); background:var(--surface); color:var(--ink-soft); cursor:pointer;
   transition:all .15s ease;
 }
-.chip.active{ background:var(--brand); border-color:transparent; color:#1A1206; font-weight:700; box-shadow:var(--shadow-glow); }
+.chip.active{ background:var(--aurum); border-color:transparent; color:#02291D; font-weight:700; box-shadow:var(--shadow-glow-gold); }
 
 /* Floating glass tab bar */
 .bottom-nav{
@@ -263,11 +272,11 @@ input:focus, select:focus, textarea:focus{
   font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:.01em; color:var(--ink-faint);
   transition:color .2s ease; border-radius:17px;
 }
-.nav-item.active{ color:#1A1206; }
+.nav-item.active{ color:#02291D; }
 .nav-item .nav-icon{ display:flex; position:relative; z-index:1; }
 .nav-pill{
-  position:absolute; inset:3px; border-radius:17px; background:var(--brand);
-  box-shadow:var(--shadow-glow); z-index:0;
+  position:absolute; inset:3px; border-radius:17px; background:var(--aurum);
+  box-shadow:var(--shadow-glow-gold); z-index:0;
 }
 
 .fab{
@@ -275,9 +284,9 @@ input:focus, select:focus, textarea:focus{
   right: max(20px, calc((100vw - 520px) / 2 + 20px));
   bottom: calc(94px + env(safe-area-inset-bottom) + 12px);
   width:58px; height:58px; border-radius:19px;
-  background:var(--brand);
-  color:#1A1206; border:none; cursor:pointer;
-  box-shadow: var(--shadow-glow), 0 12px 28px -8px rgba(0,0,0,0.5);
+  background:var(--aurum);
+  color:#02291D; border:none; cursor:pointer;
+  box-shadow: var(--shadow-glow-gold), 0 12px 28px -8px rgba(0,0,0,0.5);
   z-index:35;
   display:flex; align-items:center; justify-content:center;
 }
@@ -297,14 +306,51 @@ input:focus, select:focus, textarea:focus{
 .onboard-hero{ text-align:center; padding:44px 16px 6px; }
 .onboard-hero .glyph{
   font-family:var(--display); font-size:42px; font-weight:600;
-  background:var(--brand); -webkit-background-clip:text; background-clip:text; color:transparent;
+  background:var(--aurum); -webkit-background-clip:text; background-clip:text; color:transparent;
   margin-bottom:14px; display:inline-block;
 }
 .onboard-hero h1{ font-family:var(--display); font-size:27px; margin:0 0 9px; font-weight:600; letter-spacing:-0.01em; }
 .onboard-hero p{ color:var(--ink-soft); font-size:14.5px; max-width:380px; margin:0 auto; line-height:1.55; }
 .onboard-steps{ display:flex; justify-content:center; gap:6px; margin:18px 0 6px; }
 .onboard-steps span{ width:6px; height:6px; border-radius:50%; background:var(--surface-border-strong); transition:all .25s; }
-.onboard-steps span.active{ background:var(--brand); width:20px; border-radius:4px; }
+.onboard-steps span.active{ background:var(--aurum); width:20px; border-radius:4px; }
+
+/* Splash-style welcome panel — full-bleed dark hero matching the MoneyMate brand mockup */
+.splash-hero{
+  position:relative;
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center;
+  padding: calc(env(safe-area-inset-top) + 56px) 24px 40px;
+  background:
+    radial-gradient(ellipse 520px 380px at 50% 22%, rgba(86,242,154,0.16), transparent 62%),
+    radial-gradient(ellipse 480px 420px at 90% 5%, rgba(2,145,109,0.14), transparent 60%),
+    var(--void);
+  overflow:hidden;
+  text-align:center;
+}
+.splash-hero .icon-mark{ width:132px; height:auto; filter: drop-shadow(0 18px 40px rgba(2,145,109,0.35)); margin-bottom: 22px; position:relative; z-index:2; }
+.splash-hero .wordmark{ font-family:var(--display); font-size:34px; font-weight:600; letter-spacing:-0.01em; margin:0 0 8px; position:relative; z-index:2; }
+.splash-hero .wordmark .money{ color:#fff; }
+.splash-hero .wordmark .mate{ background:var(--aurum); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.splash-hero .tagline{ font-family:var(--mono); font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 28px; position:relative; z-index:2; }
+
+.splash-hero .pitch{ color:var(--ink-soft); font-size:14.5px; line-height:1.6; max-width:340px; margin:0 0 26px; position:relative; z-index:2; }
+.splash-hero .pitch b{ color:var(--ink); font-weight:600; }
+
+.splash-hero .trust-icons{ display:flex; gap:28px; align-items:center; justify-content:center; margin-bottom:auto; position:relative; z-index:2; padding-bottom: 40px; }
+.splash-hero .trust-icons .ti{
+  width:44px; height:44px; border-radius:13px; display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(86,242,154,0.28); color: rgba(86,242,154,0.75);
+  background: rgba(86,242,154,0.06);
+}
+
+.splash-hero .waves{
+  position:absolute; left:0; right:0; bottom:0; width:100%; height:220px;
+  z-index:1; opacity:0.9; pointer-events:none;
+}
+
+.splash-hero .cta-wrap{ position:relative; z-index:2; width:100%; max-width:360px; }
+.splash-hero .btn{ margin-top:0; }
 
 .ring-wrap{ display:flex; align-items:center; gap:18px; }
 .ring-figs{ flex:1; }

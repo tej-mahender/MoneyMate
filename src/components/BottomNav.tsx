@@ -41,7 +41,7 @@ export default function BottomNav() {
               <span className="nav-icon">
                 <Icon size={19} strokeWidth={isActive ? 2.4 : 2} />
               </span>
-              <span style={{ position: 'relative', zIndex: 1 }}>{t.label}</span>
+              {/* <span style={{ position: 'relative', zIndex: 1 }}>{t.label}</span> */}
             </NavLink>
           );
         })}

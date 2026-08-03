@@ -1,28 +1,53 @@
-import { useState } from 'react';
-import { db, DEFAULT_CATEGORIES, updateSettings } from '../db/db';
-import { Sparkles, X } from 'lucide-react';
-import IconPicker from '../components/IconPicker';
+import { useState } from "react";
+import { db, DEFAULT_CATEGORIES, updateSettings } from "../db/db";
+import { PiggyBank, IndianRupee, CreditCard, X } from "lucide-react";
+import IconPicker from "../components/IconPicker";
+import moneyMateIcon from "/icons/apple-touch-icon.png";
 
-const CURRENCIES = ['₹', '$', '€', '£'];
+const CURRENCIES = ["₹", "$", "€", "£"];
 
 type DraftCat = { name: string; icon: string; color: string; budget: string };
 
-const PALETTE = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#F0A83E', '#FF6B6B', '#6FC98A'];
+const PALETTE = [
+  "#F0B94D",
+  "#4FD9B8",
+  "#7C93F0",
+  "#E8618C",
+  "#B98CF0",
+  "#F0A83E",
+  "#FF6B6B",
+  "#6FC98A",
+];
 
 export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
-  const [currency, setCurrency] = useState('₹');
-  const [income, setIncome] = useState('');
+  const [currency, setCurrency] = useState("₹");
+  const [income, setIncome] = useState("");
   const [cats, setCats] = useState<DraftCat[]>(
-    DEFAULT_CATEGORIES.map((c) => ({ name: c.name, icon: c.icon, color: c.color, budget: '' }))
+    DEFAULT_CATEGORIES.map((c) => ({
+      name: c.name,
+      icon: c.icon,
+      color: c.color,
+      budget: "",
+    })),
   );
   const [saving, setSaving] = useState(false);
 
   function updateCat(i: number, field: keyof DraftCat, val: string) {
-    setCats((prev) => prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)));
+    setCats((prev) =>
+      prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)),
+    );
   }
   function addCat() {
-    setCats((prev) => [...prev, { name: '', icon: '＊', color: PALETTE[prev.length % PALETTE.length], budget: '' }]);
+    setCats((prev) => [
+      ...prev,
+      {
+        name: "",
+        icon: "＊",
+        color: PALETTE[prev.length % PALETTE.length],
+        budget: "",
+      },
+    ]);
   }
   function removeCat(i: number) {
     setCats((prev) => prev.filter((_, idx) => idx !== i));
@@ -30,7 +55,12 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
   async function finish() {
     const clean = cats
-      .map((c) => ({ name: c.name.trim(), icon: c.icon || '＊', color: c.color, budget: parseFloat(c.budget) || 0 }))
+      .map((c) => ({
+        name: c.name.trim(),
+        icon: c.icon || "＊",
+        color: c.color,
+        budget: parseFloat(c.budget) || 0,
+      }))
       .filter((c) => c.name.length > 0);
     if (clean.length === 0) return;
     setSaving(true);
@@ -44,44 +74,69 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     onDone();
   }
 
+  if (step === 0) {
+    return (
+      <div className="splash-hero">
+        <img src={moneyMateIcon} alt="MoneyMate" className="icon-mark" />
+        <h1 className="wordmark">
+          <span className="money">Money</span>
+          <span className="mate">Mate</span>
+        </h1>
+        <p className="tagline">Track &nbsp;·&nbsp; Plan &nbsp;·&nbsp; Grow</p>
+        <p className="pitch">
+          Your <b>private</b> finance tracker — no login, no cloud, no ads, no
+          analytics. Everything you enter stays on this device, under your
+          control, forever.
+        </p>
+        <div className="trust-icons">
+          <div className="ti">
+            <PiggyBank size={19} strokeWidth={1.75} />
+          </div>
+          <div className="ti">
+            <IndianRupee size={19} strokeWidth={1.75} />
+          </div>
+          <div className="ti">
+            <CreditCard size={19} strokeWidth={1.75} />
+          </div>
+        </div>
+
+        <svg
+          className="waves"
+          viewBox="0 0 500 160"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M0,90 C120,60 180,110 300,80 C380,60 440,95 500,70 L500,160 L0,160 Z"
+            fill="rgba(86,242,154,0.10)"
+          />
+          <path
+            d="M0,115 C100,90 220,135 320,105 C400,82 450,120 500,100 L500,160 L0,160 Z"
+            fill="rgba(2,145,109,0.16)"
+          />
+          <path
+            d="M0,140 C140,120 260,150 380,125 C430,113 470,135 500,125 L500,160 L0,160 Z"
+            fill="rgba(2,145,109,0.28)"
+          />
+        </svg>
+
+        <div className="cta-wrap">
+          <div className="onboard-steps" style={{ marginBottom: 16 }}>
+            <span className="active" />
+            <span />
+            <span />
+          </div>
+          <button className="btn" onClick={() => setStep(1)}>
+            Get started
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <div className="content">
-        {step === 0 && (
-          <div className="onboard-hero">
-            <div
-              className="glyph"
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 22,
-                background: "var(--aurum)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 16px",
-                boxShadow: "var(--shadow-glow-gold)",
-              }}
-            >
-              <Sparkles size={32} color="#1A1206" strokeWidth={2} />
-            </div>
-            <h1>Welcome to MoneyMate</h1>
-            <p>
-              A private place to track every rupee — no login, no cloud, no ads,
-              no analytics. Everything you enter stays on this device, in this
-              browser, forever under your control.
-            </p>
-            <div className="onboard-steps">
-              <span className="active" />
-              <span />
-              <span />
-            </div>
-            <button className="btn" onClick={() => setStep(1)}>
-              Get started
-            </button>
-          </div>
-        )}
-
         {step === 1 && (
           <>
             <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
@@ -117,6 +172,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                 placeholder="0.00"
                 value={income}
                 onChange={(e) => setIncome(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
               />
               <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
                 {Number(income) > 0
@@ -169,6 +225,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                     placeholder="Budget"
                     value={c.budget}
                     onChange={(e) => updateCat(i, "budget", e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
                   />
                   <button
                     className="icon-btn danger"
