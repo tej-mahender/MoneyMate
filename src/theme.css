@@ -316,41 +316,58 @@ input:focus, select:focus, textarea:focus{
 .onboard-steps span.active{ background:var(--aurum); width:20px; border-radius:4px; }
 
 /* Splash-style welcome panel — full-bleed dark hero matching the MoneyMate brand mockup */
-.splash-hero{
+/* Shared background for ALL THREE onboarding steps — dark gradient + wave
+   graphic stay identical throughout, so the flow feels like one continuous
+   surface rather than a branded splash followed by two plain form screens. */
+.onboard-shell{
   position:relative;
   min-height:100vh;
-  display:flex; flex-direction:column; align-items:center;
-  padding: calc(env(safe-area-inset-top) + 56px) 24px 40px;
+  overflow-x:hidden;
   background:
     radial-gradient(ellipse 520px 380px at 50% 22%, rgba(86,242,154,0.16), transparent 62%),
     radial-gradient(ellipse 480px 420px at 90% 5%, rgba(2,145,109,0.14), transparent 60%),
     var(--void);
-  overflow:hidden;
+}
+.onboard-shell .waves{
+  position:absolute; left:0; right:0; bottom:0; width:100%; height:220px;
+  z-index:1; opacity:0.9; pointer-events:none;
+}
+.onboard-shell .shell-inner{
+  position:relative; z-index:2;
+  max-width:520px; margin:0 auto;
+  min-height:100vh;
+  display:flex; flex-direction:column;
+}
+
+/* Step 0 only: centered hero layout inside the shared shell */
+.splash-hero{
+  flex:1;
+  display:flex; flex-direction:column; align-items:center;
+  padding: calc(env(safe-area-inset-top) + 56px) 24px 40px;
   text-align:center;
 }
-.splash-hero .icon-mark{ width:132px; height:auto; filter: drop-shadow(0 18px 40px rgba(2,145,109,0.35)); margin-bottom: 22px; position:relative; z-index:2; }
-.splash-hero .wordmark{ font-family:var(--display); font-size:34px; font-weight:600; letter-spacing:-0.01em; margin:0 0 8px; position:relative; z-index:2; }
+.splash-hero .icon-mark{ width:132px; height:auto; filter: drop-shadow(0 18px 40px rgba(2,145,109,0.35)); margin-bottom: 22px; }
+.splash-hero .wordmark{ font-family:var(--display); font-size:34px; font-weight:600; letter-spacing:-0.01em; margin:0 0 8px; }
 .splash-hero .wordmark .money{ color:#fff; }
 .splash-hero .wordmark .mate{ background:var(--aurum); -webkit-background-clip:text; background-clip:text; color:transparent; }
-.splash-hero .tagline{ font-family:var(--mono); font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 28px; position:relative; z-index:2; }
+.splash-hero .tagline{ font-family:var(--mono); font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 28px; }
 
-.splash-hero .pitch{ color:var(--ink-soft); font-size:14.5px; line-height:1.6; max-width:340px; margin:0 0 26px; position:relative; z-index:2; }
+.splash-hero .pitch{ color:var(--ink-soft); font-size:14.5px; line-height:1.6; max-width:340px; margin:0 0 26px; }
 .splash-hero .pitch b{ color:var(--ink); font-weight:600; }
 
-.splash-hero .trust-icons{ display:flex; gap:28px; align-items:center; justify-content:center; margin-bottom:auto; position:relative; z-index:2; padding-bottom: 40px; }
+.splash-hero .trust-icons{ display:flex; gap:28px; align-items:center; justify-content:center; margin-bottom:auto; padding-bottom: 40px; }
 .splash-hero .trust-icons .ti{
   width:44px; height:44px; border-radius:13px; display:flex; align-items:center; justify-content:center;
   border:1px solid rgba(86,242,154,0.28); color: rgba(86,242,154,0.75);
   background: rgba(86,242,154,0.06);
 }
 
-.splash-hero .waves{
-  position:absolute; left:0; right:0; bottom:0; width:100%; height:220px;
-  z-index:1; opacity:0.9; pointer-events:none;
-}
-
-.splash-hero .cta-wrap{ position:relative; z-index:2; width:100%; max-width:360px; }
+.splash-hero .cta-wrap{ width:100%; max-width:360px; }
 .splash-hero .btn{ margin-top:0; }
+
+/* Steps 1 & 2: normal form layout on the same shared shell/waves */
+.onboard-shell .shell-content{ flex:1; padding:20px 16px 100px; }
+
 
 .ring-wrap{ display:flex; align-items:center; gap:18px; }
 .ring-figs{ flex:1; }

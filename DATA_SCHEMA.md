@@ -3,7 +3,7 @@
 This app is built local-first, but every export uses a stable, documented schema
 specifically so it plugs into Power BI or a Python/pandas ML pipeline without any
 reshaping. This file is the data dictionary for those exports. `schemaVersion`
-(currently `2`) is included in the JSON backup and the ML dataset export — check
+(currently `3`) is included in the JSON backup and the ML dataset export — check
 it before assuming field names haven't changed if you're building an automated
 pipeline against this data.
 
@@ -49,9 +49,10 @@ back off in code if you're parsing programmatically rather than opening by hand.
 |---|---|---|
 | `CategoryId` | integer | Primary key |
 | `Name` | string | |
+| `Type` | string | `expense` or `income` — as of schema v3, income sources (Salary, Freelance, etc.) are separate from spending categories and never carry a budget |
 | `Icon` | string | Emoji |
 | `Color` | string | Hex color used in-app |
-| `MonthlyBudget` | float | The budget cap for this category |
+| `MonthlyBudget` | float | The budget cap — always `0` for `Type = income`, since budgets don't apply to income sources |
 | `Archived` | boolean | Archived categories are excluded from onboarding/active views but not deleted |
 
 ## `pfos-monthly-summary-*.csv`

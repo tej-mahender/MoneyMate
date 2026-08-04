@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Category, type Recurring, type Frequency, updateSettings, type Settings as SettingsType } from '../db/db';
+import { db, type Category, type Recurring, type Frequency, updateSettings, type Settings as SettingsType, ensureIncomeCategoriesSeeded } from '../db/db';
 import { X } from 'lucide-react';
 import {
   exportFullBackup, exportTransactionsCSV, exportCategoriesCSV, exportMonthlySummaryCSV,
@@ -16,15 +16,17 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   const showToast = useUIStore((s) => s.showToast);
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const recurring = useLiveQuery(() => db.recurring.toArray(), []) ?? [];
+  const expenseCategories = categories.filter((c) => c.type !== 'income');
+  const incomeCategories = categories.filter((c) => c.type === 'income');
 
   const [draftCats, setDraftCats] = useState<Category[]>([]);
-  useEffect(() => setDraftCats(categories), [categories.length, JSON.stringify(categories.map((c) => c.id))]);
+  useEffect(() => setDraftCats(expenseCategories), [categories.length, JSON.stringify(expenseCategories.map((c) => c.id))]);
 
   function updateCat(i: number, field: keyof Category, val: string | number) {
     setDraftCats((prev) => prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)));
   }
   function addCat() {
-    setDraftCats((prev) => [...prev, { name: '', icon: '＊', color: PALETTE[prev.length % PALETTE.length], budget: 0 }]);
+    setDraftCats((prev) => [...prev, { name: '', icon: '＊', color: PALETTE[prev.length % PALETTE.length], budget: 0, type: 'expense' }]);
   }
   async function removeCat(i: number) {
     const cat = draftCats[i];
@@ -34,10 +36,34 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   async function saveCats() {
     for (const c of draftCats) {
       if (!c.name.trim()) continue;
-      if (c.id) await db.categories.update(c.id, { name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color });
-      else await db.categories.add({ name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color });
+      if (c.id) await db.categories.update(c.id, { name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color, type: 'expense' });
+      else await db.categories.add({ name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color, type: 'expense' });
     }
     showToast('Budgets saved.');
+  }
+
+  // Income categories — separate from expense budgets entirely; no budget field applies here.
+  const [draftIncomeCats, setDraftIncomeCats] = useState<Category[]>([]);
+  useEffect(() => setDraftIncomeCats(incomeCategories), [categories.length, JSON.stringify(incomeCategories.map((c) => c.id))]);
+
+  function updateIncomeCat(i: number, field: keyof Category, val: string | number) {
+    setDraftIncomeCats((prev) => prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)));
+  }
+  function addIncomeCat() {
+    setDraftIncomeCats((prev) => [...prev, { name: '', icon: '💰', color: PALETTE[prev.length % PALETTE.length], budget: 0, type: 'income' }]);
+  }
+  async function removeIncomeCat(i: number) {
+    const cat = draftIncomeCats[i];
+    if (cat.id) await db.categories.delete(cat.id);
+    setDraftIncomeCats((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  async function saveIncomeCats() {
+    for (const c of draftIncomeCats) {
+      if (!c.name.trim()) continue;
+      if (c.id) await db.categories.update(c.id, { name: c.name.trim(), icon: c.icon, color: c.color, type: 'income' });
+      else await db.categories.add({ name: c.name.trim(), budget: 0, icon: c.icon, color: c.color, type: 'income' });
+    }
+    showToast('Income sources saved.');
   }
 
   // Recurring
@@ -76,6 +102,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   }
   async function saveIncome() {
     const val = parseFloat(incomeDraft) || 0;
+    if (val > 0) await ensureIncomeCategoriesSeeded();
     const next = await updateSettings({ monthlyIncome: val });
     onSettingsChange(next);
     showToast(val > 0 ? 'Income tracking is on.' : 'Income tracking is off — dashboard shows budget only.');
@@ -141,12 +168,40 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
                 onColorChange={(color) => updateCat(i, 'color', color)}
               />
               <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
-              <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} />
+              <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
               <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}><X size={15} /></button>
             </div>
           ))}
           <button className="btn secondary" onClick={addCat}>+ Add category</button>
           <button className="btn" onClick={saveCats}>Save changes</button>
+        </div>
+
+        <div className="card">
+          <h2>Income sources</h2>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            Separate from your spending categories above — no budget applies here, these just label where money
+            comes from (salary, freelance work, etc.) when you log it as income.
+          </p>
+          {draftIncomeCats.length === 0 && (
+            <p className="muted" style={{ marginBottom: 12 }}>
+              None yet. Add one below, or set a monthly income in Preferences to add the common ones automatically.
+            </p>
+          )}
+          {draftIncomeCats.map((c, i) => (
+            <div className="cat-edit-row" key={c.id ?? 'new-income-' + i}>
+              <IconPicker
+                icon={c.icon}
+                color={c.color}
+                palette={PALETTE}
+                onIconChange={(icon) => updateIncomeCat(i, 'icon', icon)}
+                onColorChange={(color) => updateIncomeCat(i, 'color', color)}
+              />
+              <input type="text" placeholder="Source (e.g. Salary)" value={c.name} onChange={(e) => updateIncomeCat(i, 'name', e.target.value)} style={{ flex: 1 }} />
+              <button className="icon-btn danger" aria-label="Remove" onClick={() => removeIncomeCat(i)}><X size={15} /></button>
+            </div>
+          ))}
+          <button className="btn secondary" onClick={addIncomeCat}>+ Add income source</button>
+          <button className="btn" onClick={saveIncomeCats}>Save changes</button>
         </div>
 
         <div className="card">
@@ -178,7 +233,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <div className="row2">
             <div>
               <label>Amount</label>
-              <input type="number" value={rAmount} onChange={(e) => setRAmount(e.target.value)} />
+              <input type="number" value={rAmount} onChange={(e) => setRAmount(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
             </div>
             <div>
               <label>Frequency</label>
@@ -224,7 +279,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
             ))}
           </div>
           <label htmlFor="monthly-income">Monthly income</label>
-          <input id="monthly-income" type="number" inputMode="decimal" placeholder="0.00" value={incomeDraft} onChange={(e) => setIncomeDraft(e.target.value)} />
+          <input id="monthly-income" type="number" inputMode="decimal" placeholder="0.00" value={incomeDraft} onChange={(e) => setIncomeDraft(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
           <p className="muted" style={{ marginTop: 8 }}>
             {Number(incomeDraft) > 0
               ? 'The dashboard tracks income vs. spend and shows savings. Your fixed income counts automatically each month — you don\u2019t need to log it as a transaction.'
@@ -253,7 +308,6 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
             In Power BI: Get Data → Text/CSV for each file, then relate Transactions to Categories on <code>CategoryId</code>. See <code>DATA_SCHEMA.md</code> in the project source for full field definitions.
           </p>
         </div>
-
         <div className="card">
           <h2>About</h2>
           <p className="muted">Money Mate — zero login, zero ads, zero subscription. Installable to your home screen and fully usable offline.</p>

@@ -2,7 +2,7 @@ import Papa from 'papaparse';
 import { db, type Category, type Transaction, type Recurring } from '../db/db';
 import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from './format';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** Prevents CSV formula injection: a cell starting with =, +, -, or @ gets
  *  interpreted as a formula by Excel/Sheets when the file is opened. Prefixing
@@ -66,6 +66,7 @@ export async function exportCategoriesCSV(): Promise<string> {
   const rows = categories.map((c) => ({
     CategoryId: c.id,
     Name: sanitizeCsvCell(c.name),
+    Type: c.type ?? "expense",
     Icon: c.icon,
     Color: c.color,
     MonthlyBudget: c.budget,

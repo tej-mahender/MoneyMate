@@ -12,54 +12,66 @@ export default function Dashboard({ currency, monthlyIncome }: { currency: strin
   const curMonth = monthKey(todayISO());
 
   const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const categories = allCats.filter((c) => !c.archived);
-  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
+ const categories = allCats.filter((c) => !c.archived && c.type !== "income");
+ const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
 
-  const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
-  const spentTx = monthTx.filter((t) => t.type === 'expense');
-  const incomeTx = monthTx.filter((t) => t.type === 'income');
+ const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
+ const spentTx = monthTx.filter((t) => t.type === "expense");
+ const incomeTx = monthTx.filter((t) => t.type === "income");
 
-  const totalBudget = allCats.reduce((s, c) => s + c.budget, 0);
-  const totalSpent = spentTx.reduce((s, t) => s + t.amount, 0);
-  // Fixed salary counts automatically every month without needing to be logged as
-  // a transaction; anything logged as income (bonus, freelance) adds on top of it.
-  const loggedIncome = incomeTx.reduce((s, t) => s + t.amount, 0);
-  const totalIncome = monthlyIncome + loggedIncome;
-  const remaining = totalBudget - totalSpent;
-  const savings = totalIncome - totalSpent;
-  const savingsPct = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
-  // Whether to show income/savings at all is a single, predictable decision made
-  // once at onboarding (or later in Settings) — not inferred from behavior.
-  const trackIncome = monthlyIncome > 0;
+ const totalBudget = allCats
+   .filter((c) => c.type !== "income")
+   .reduce((s, c) => s + c.budget, 0);
+ const totalSpent = spentTx.reduce((s, t) => s + t.amount, 0);
+ // Fixed salary counts automatically every month without needing to be logged as
+ // a transaction; anything logged as income (bonus, freelance) adds on top of it.
+ const loggedIncome = incomeTx.reduce((s, t) => s + t.amount, 0);
+ const totalIncome = monthlyIncome + loggedIncome;
+ const trackIncome = monthlyIncome > 0;
+ // "Remaining" must tally with whatever figure it's shown beside in the top row:
+ // Income − Spent when income tracking is on, Budget − Spent when it's off. It was
+ // previously always budget-based even when displayed next to Income, which meant
+ // the two numbers had no arithmetic relationship to each other at all.
+ const remaining = trackIncome
+   ? totalIncome - totalSpent
+   : totalBudget - totalSpent;
+ const budgetRemaining = totalBudget - totalSpent;
+ const savings = totalIncome - totalSpent;
+ const savingsPct = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
 
-  const elapsed = dayOfMonthProgress(curMonth);
-  const totalDays = daysInMonth(curMonth);
-  const dailyAvg = elapsed > 0 ? totalSpent / elapsed : 0;
-  // const projected = dailyAvg * totalDays;
+ const elapsed = dayOfMonthProgress(curMonth);
+ const totalDays = daysInMonth(curMonth);
+ const dailyAvg = elapsed > 0 ? totalSpent / elapsed : 0;
+//  const projected = dailyAvg * totalDays;
 
-  const today = todayISO();
-  const todaySpend = spentTx.filter((t) => t.date === today).reduce((s, t) => s + t.amount, 0);
+ const today = todayISO();
+ const todaySpend = spentTx
+   .filter((t) => t.date === today)
+   .reduce((s, t) => s + t.amount, 0);
 
-  const recent = txs
-    .slice()
-    .sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1))
-    .slice(0, 6);
+ const recent = txs
+   .slice()
+   .sort((a, b) =>
+     a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1,
+   )
+   .slice(0, 6);
 
-  const catMap = new Map(allCats.map((c) => [c.id, c]));
+ const catMap = new Map(allCats.map((c) => [c.id, c]));
 
-  const budgetPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
-  const ringState = budgetPct < 75 ? 'good' : budgetPct < 100 ? 'warn' : 'over';
-  const ringColor = `var(--${ringState === 'warn' ? 'gold' : ringState})`;
+ const budgetPct =
+   totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
+ const ringState = budgetPct < 75 ? "good" : budgetPct < 100 ? "warn" : "over";
+ const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
 
-  useEffect(() => {
-    syncWidget({
-      spent: totalSpent,
-      budget: totalBudget,
-      remaining,
-      currency,
-      monthLabel: monthLabel(curMonth),
-    });
-  }, [totalSpent, totalBudget, remaining, currency, curMonth]);
+ useEffect(() => {
+   syncWidget({
+     spent: totalSpent,
+     budget: totalBudget,
+     remaining: budgetRemaining,
+     currency,
+     monthLabel: monthLabel(curMonth),
+   });
+ }, [totalSpent, totalBudget, budgetRemaining, currency, curMonth]);
 
   return (
     <>
