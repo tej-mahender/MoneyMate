@@ -74,7 +74,9 @@
 }
 
 *{ box-sizing:border-box; }
-html,body,#root{ height:100%; }
+html,body,#root{  width:100%;
+    height:100%;
+    overflow-x:hidden; }
 body{
   margin:0;
   background: var(--void);
@@ -103,7 +105,7 @@ button:focus:not(:focus-visible){ outline:none; }
 .app-shell{
   max-width:520px;
   margin:0 auto;
-  min-height:100vh;
+  min-height:100dvh;
   display:flex;
   flex-direction:column;
   position:relative;
@@ -321,7 +323,7 @@ input:focus, select:focus, textarea:focus{
    surface rather than a branded splash followed by two plain form screens. */
 .onboard-shell{
   position:relative;
-  min-height:100vh;
+  min-height:100dvh;
   overflow-x:hidden;
   background:
     radial-gradient(ellipse 520px 380px at 50% 22%, rgba(86,242,154,0.16), transparent 62%),
@@ -329,13 +331,13 @@ input:focus, select:focus, textarea:focus{
     var(--void);
 }
 .onboard-shell .waves{
-  position:absolute; left:0; right:0; bottom:0; width:100%; height:220px;
-  z-index:1; opacity:0.9; pointer-events:none;
+  position:fixed; left:0; bottom:0; width:100%; height:220px;
+  z-index:0; opacity:0.9; pointer-events:none;
 }
 .onboard-shell .shell-inner{
   position:relative; z-index:2;
   max-width:520px; margin:0 auto;
-  min-height:100vh;
+  min-height:100dvh;
   display:flex; flex-direction:column;
 }
 
@@ -376,4 +378,22 @@ input:focus, select:focus, textarea:focus{
 
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+}
+@media (max-width:480px){
+
+  .splash-hero{
+      padding:
+      calc(env(safe-area-inset-top) + 32px)
+      20px
+      20px;
+  }
+
+  .splash-hero .icon-mark{
+      width:110px;
+  }
+
+  .splash-hero .trust-icons{
+      padding-bottom:20px;
+  }
+
 }
