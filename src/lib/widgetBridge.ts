@@ -1,4 +1,4 @@
-import { registerPlugin, Capacitor } from '@capacitor/core';
+import { registerPlugin, Capacitor } from "@capacitor/core";
 
 export interface WidgetSnapshot {
   spent: number;
@@ -12,7 +12,7 @@ interface WidgetBridgePlugin {
   updateWidget(options: WidgetSnapshot): Promise<{ ok: boolean }>;
 }
 
-const WidgetBridge = registerPlugin<WidgetBridgePlugin>('WidgetBridge');
+const WidgetBridge = registerPlugin<WidgetBridgePlugin>("WidgetBridge");
 
 /**
  * Pushes the current month's totals to the native home-screen widget.
@@ -25,6 +25,6 @@ export async function syncWidget(snapshot: WidgetSnapshot): Promise<void> {
     await WidgetBridge.updateWidget(snapshot);
   } catch (err) {
     // Widget sync is best-effort — never let it break the dashboard.
-    console.warn('Widget sync failed', err);
+    console.warn("Widget sync failed", err);
   }
 }

@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useNavigate } from "react-router-dom";
-import { db, type TxType } from "../db/db";
-import { todayISO } from "../lib/format";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { db, type TxType, computeMonthSummary, getSettings } from "../db/db";
+import { todayISO, monthLabel, monthKey } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
+import {
+  isQuickAddContext,
+  closeQuickAdd,
+  pushQuickWidgetSync,
+} from "../lib/quickAdd";
+import { X } from "lucide-react";
+import Dropdown from "../components/Dropdown";
 
 const RECENT_CAT_KEY = "pfos_last_category"; // suffixed per type, e.g. `${RECENT_CAT_KEY}_expense`
 
 export default function AddTransaction() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const quick = isQuickAddContext() || searchParams.get("quick") === "1";
   const showToast = useUIStore((s) => s.showToast);
   const allCategories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
 
@@ -66,6 +75,25 @@ export default function AddTransaction() {
     });
     localStorage.setItem(`${RECENT_CAT_KEY}_${type}`, String(categoryId));
     setSaving(false);
+
+    if (quick) {
+      // No Dashboard is rendered in this popup context, so push a fresh
+      // widget refresh directly using the same totals Dashboard would show.
+      const [summary, settings] = await Promise.all([
+        computeMonthSummary(),
+        getSettings(),
+      ]);
+      pushQuickWidgetSync({
+        spent: summary.spent,
+        budget: summary.budget,
+        remaining: summary.remaining,
+        currency: settings.currency,
+        monthLabel: monthLabel(monthKey(todayISO())),
+      });
+      closeQuickAdd();
+      return;
+    }
+
     showToast(
       `Added ${amount} to ${categories.find((c) => c.id === categoryId)?.name || ""}.`,
     );
@@ -80,11 +108,36 @@ export default function AddTransaction() {
 
   return (
     <>
-      <header className="topbar">
-        <div className="eyebrow">Log it</div>
-        <h1>Add transaction</h1>
-        <div className="sub">Takes about five seconds</div>
-      </header>
+      {quick ? (
+        <header
+          className="topbar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <div className="eyebrow">Quick add</div>
+            <h1 style={{ fontSize: 20 }}>
+              Log a {type === "income" ? "income" : "expense"}
+            </h1>
+          </div>
+          <button
+            className="icon-btn"
+            aria-label="Close"
+            onClick={closeQuickAdd}
+          >
+            <X size={20} />
+          </button>
+        </header>
+      ) : (
+        <header className="topbar">
+          <div className="eyebrow">Log it</div>
+          <h1>Add transaction</h1>
+          <div className="sub">Takes about five seconds</div>
+        </header>
+      )}
       <div className="content">
         <div className="card">
           <div className="chip-row" style={{ marginBottom: 4 }}>
@@ -131,17 +184,15 @@ export default function AddTransaction() {
               <label htmlFor="cat">
                 {type === "income" ? "Source" : "Category"}
               </label>
-              <select
+              <Dropdown
                 id="cat"
-                value={categoryId ?? ""}
-                onChange={(e) => setCategoryId(Number(e.target.value))}
-              >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.icon} {c.name}
-                  </option>
-                ))}
-              </select>
+                value={categoryId != null ? String(categoryId) : ""}
+                onChange={(v) => setCategoryId(Number(v))}
+                options={categories.map((c) => ({
+                  value: String(c.id),
+                  label: `${c.icon} ${c.name}`,
+                }))}
+              />
 
               <div className="chip-row">
                 {categories.slice(0, 5).map((c) => (
@@ -188,22 +239,19 @@ export default function AddTransaction() {
                 onChange={(e) => setNote(e.target.value)}
               />
               <label htmlFor="pm">Payment method</label>
-              <select
+              <Dropdown
                 id="pm"
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              >
-                {[
+                onChange={setPaymentMethod}
+                options={[
                   "UPI",
                   "Cash",
                   "Credit Card",
                   "Debit Card",
                   "Wallet",
                   "Bank Transfer",
-                ].map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
+                ].map((p) => ({ value: p, label: p }))}
+              />
             </>
           )}
 
@@ -214,13 +262,15 @@ export default function AddTransaction() {
           >
             {saving ? "Saving…" : "Save"}
           </button>
-          <button
-            className="btn secondary"
-            disabled={saving || categories.length === 0}
-            onClick={() => save(true)}
-          >
-            Save &amp; add another
-          </button>
+          {!quick && (
+            <button
+              className="btn secondary"
+              disabled={saving || categories.length === 0}
+              onClick={() => save(true)}
+            >
+              Save &amp; add another
+            </button>
+          )}
         </div>
       </div>
     </>

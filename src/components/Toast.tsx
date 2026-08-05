@@ -1,5 +1,5 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { useUIStore } from '../store/useUIStore';
+import { AnimatePresence, motion } from "framer-motion";
+import { useUIStore } from "../store/useUIStore";
 
 export default function Toast() {
   const msg = useUIStore((s) => s.toastMsg);

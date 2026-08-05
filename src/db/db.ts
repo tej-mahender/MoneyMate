@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { monthKey, todayISO } from "../lib/format";
 
 export type TxType = "expense" | "income";
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
@@ -242,4 +243,28 @@ export async function ensureIncomeCategoriesSeeded() {
   if (existing === 0) {
     await db.categories.bulkAdd(DEFAULT_INCOME_CATEGORIES);
   }
+}
+
+/** Current month's spent/budget/remaining — the same figures Dashboard shows.
+ *  Factored out so the quick-add widget popup (which never renders Dashboard)
+ *  can push an accurate widget refresh after saving, without duplicating this
+ *  logic and risking it drifting out of sync with the real dashboard math. */
+export async function computeMonthSummary() {
+  const curMonth = monthKey(todayISO());
+  const [categories, transactions] = await Promise.all([
+    db.categories.toArray(),
+    db.transactions.where("date").startsWith(curMonth).toArray(),
+  ]);
+  const totalBudget = categories
+    .filter((c) => c.type !== "income")
+    .reduce((s, c) => s + c.budget, 0);
+  const totalSpent = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+  return {
+    spent: totalSpent,
+    budget: totalBudget,
+    remaining: totalBudget - totalSpent,
+    monthKey: curMonth,
+  };
 }
