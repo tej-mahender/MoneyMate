@@ -250,14 +250,26 @@ export default function Settings({
   async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (
+      !confirm(
+        "Restoring a backup replaces every category, transaction, and recurring item currently on this device. This can't be undone. Continue?",
+      )
+    ) {
+      e.target.value = "";
+      return;
+    }
     const text = await file.text();
     try {
       await importFullBackup(text);
       showToast("Backup restored.");
       const s = await updateSettings({});
       onSettingsChange(s);
-    } catch {
-      showToast("That file doesn't look like a valid backup.");
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "That file doesn't look like a valid backup.",
+      );
     }
     e.target.value = "";
   }

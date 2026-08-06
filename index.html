@@ -5,6 +5,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
   <meta name="theme-color" content="#14171A" />
+  <!-- The app loads no external scripts, styles, fonts, or network resources
+         anywhere (all fonts/icons are self-hosted, there is no analytics/CDN
+         usage, and the codebase makes zero fetch()/XHR calls) — so this costs
+         nothing functionally and is cheap defense-in-depth against any future
+         dependency compromise trying to load or exfiltrate to a remote origin. -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';" />
   <meta name="description"
     content="A private, offline-first personal finance tracker. Your data never leaves your device." />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />

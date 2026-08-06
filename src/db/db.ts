@@ -132,23 +132,46 @@ export async function processRecurring(todayISO: string) {
   const newTransactions: Omit<Transaction, "id">[] = [];
   const recurringUpdates: { id: number; nextDate: string }[] = [];
 
+  // Backstop against any single corrupted/imported recurring row (bad
+  // frequency, bad date) hanging the whole app on every launch. advanceDate
+  // already rejects unrecognized frequencies outright; this cap is a second,
+  // independent line of defense against any other way the cursor could fail
+  // to advance — 5000 iterations covers over a decade of daily backfill,
+  // far more than any real recurring item would ever need.
+  const MAX_BACKFILL_ITERATIONS = 5000;
+
   for (const item of items) {
     let cursor = item.nextDate;
     let generated = false;
-    while (cursor <= todayISO) {
-      newTransactions.push({
-        type: item.type,
-        amount: item.amount,
-        categoryId: item.categoryId,
-        date: cursor,
-        note: item.note ? item.note : `${item.name} (auto)`,
-        merchant: item.name,
-        paymentMethod: item.paymentMethod,
-        recurringId: item.id,
-        createdAt: Date.now(),
-      });
-      cursor = advanceDate(cursor, item.frequency);
-      generated = true;
+    try {
+      let iterations = 0;
+      while (cursor <= todayISO) {
+        if (++iterations > MAX_BACKFILL_ITERATIONS) {
+          console.warn(
+            `Recurring item ${item.id} ("${item.name}") exceeded the backfill cap — stopping early to avoid hanging the app. Check its data.`,
+          );
+          break;
+        }
+        newTransactions.push({
+          type: item.type,
+          amount: item.amount,
+          categoryId: item.categoryId,
+          date: cursor,
+          note: item.note ? item.note : `${item.name} (auto)`,
+          merchant: item.name,
+          paymentMethod: item.paymentMethod,
+          recurringId: item.id,
+          createdAt: Date.now(),
+        });
+        cursor = advanceDate(cursor, item.frequency);
+        generated = true;
+      }
+    } catch (err) {
+      // Most likely an invalid frequency from a malformed/imported backup.
+      // Skip just this item rather than let one bad row take down recurring
+      // processing (and therefore app launch) for everything else.
+      console.warn(`Skipping recurring item ${item.id} — invalid data:`, err);
+      continue;
     }
     if (generated) {
       recurringUpdates.push({ id: item.id!, nextDate: cursor });
@@ -171,6 +194,14 @@ export function advanceDate(iso: string, freq: Frequency): string {
   else if (freq === "weekly") d.setDate(d.getDate() + 7);
   else if (freq === "monthly") d.setMonth(d.getMonth() + 1);
   else if (freq === "yearly") d.setFullYear(d.getFullYear() + 1);
+  else {
+    // An unrecognized frequency (only reachable via a malformed/imported
+    // recurring row, since the UI only ever offers the four values above)
+    // must never fall through silently — returning `iso` unchanged here
+    // would leave the while-loop in processRecurring() below stuck on the
+    // same date forever, hanging the app on every future launch.
+    throw new Error(`advanceDate: unrecognized frequency "${freq}"`);
+  }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
