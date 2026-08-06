@@ -13,8 +13,10 @@ import { useUIStore } from "../store/useUIStore";
 import CalendarHeatmap from "../components/CalendarHeatmap";
 import { List, CalendarDays, Inbox, X } from "lucide-react";
 import Dropdown from "../components/Dropdown";
+import { useNavigate } from "react-router-dom";
 
 export default function History({ currency }: { currency: string }) {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const showToast = useUIStore((s) => s.showToast);
   const allTx = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
@@ -174,7 +176,11 @@ export default function History({ currency }: { currency: string }) {
             filtered.map((t) => {
               const c = catMap.get(t.categoryId);
               return (
-                <div className="tx" key={t.id}>
+                <div
+                  className="tx tx-link"
+                  key={t.id}
+                  onClick={() => navigate(`/transaction/${t.id}`)}
+                >
                   <div className="tx-left">
                     <div
                       className="tx-icon"
@@ -209,7 +215,10 @@ export default function History({ currency }: { currency: string }) {
                     <button
                       className="icon-btn danger"
                       aria-label="Delete"
-                      onClick={() => del(t)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        del(t);
+                      }}
                     >
                       <X size={15} />
                     </button>

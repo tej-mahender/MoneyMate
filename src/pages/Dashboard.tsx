@@ -217,7 +217,11 @@ export default function Dashboard({
             recent.map((t) => {
               const c = catMap.get(t.categoryId);
               return (
-                <div className="tx" key={t.id}>
+                <div
+                  className="tx tx-link"
+                  key={t.id}
+                  onClick={() => navigate(`/transaction/${t.id}`)}
+                >
                   <div className="tx-left">
                     <div
                       className="tx-icon"

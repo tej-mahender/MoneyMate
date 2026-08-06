@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, type TxType, computeMonthSummary, getSettings } from "../db/db";
@@ -18,6 +18,13 @@ export default function AddTransaction() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const quick = isQuickAddContext() || searchParams.get("quick") === "1";
+  const editId = searchParams.get("edit")
+    ? Number(searchParams.get("edit"))
+    : null;
+  const editingTx = useLiveQuery(
+    () => (editId ? db.transactions.get(editId) : undefined),
+    [editId],
+  );
   const showToast = useUIStore((s) => s.showToast);
   const allCategories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
 
@@ -38,7 +45,28 @@ export default function AddTransaction() {
   const [advanced, setAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // One-time prefill once the transaction being edited has loaded — after
+  // that the fields are just normal controlled state the user can change.
+  const prefilled = useRef(false);
   useEffect(() => {
+    if (!editingTx || prefilled.current) return;
+    prefilled.current = true;
+    setType(editingTx.type);
+    setAmount(String(editingTx.amount));
+    setCategoryId(editingTx.categoryId);
+    setDate(editingTx.date);
+    setMerchant(editingTx.merchant || "");
+    setNote(editingTx.note || "");
+    setPaymentMethod(editingTx.paymentMethod || "UPI");
+    if (editingTx.merchant || editingTx.note) setAdvanced(true);
+  }, [editingTx]);
+
+  useEffect(() => {
+    // In edit mode the category comes from the transaction being edited
+    // (handled by the prefill effect above), not from "last used" —
+    // otherwise this would stomp the loaded category the moment the type
+    // resolves.
+    if (editId) return;
     if (categories.length === 0) {
       setCategoryId(null);
       return;
@@ -46,7 +74,7 @@ export default function AddTransaction() {
     const last = localStorage.getItem(`${RECENT_CAT_KEY}_${type}`);
     const found = last && categories.find((c) => c.id === Number(last));
     setCategoryId(found ? found.id! : categories[0].id!);
-  }, [type, categories.length]);
+  }, [type, categories.length, editId]);
 
   async function save(addAnother: boolean) {
     const amt = parseFloat(amount);
@@ -63,6 +91,23 @@ export default function AddTransaction() {
       return;
     }
     setSaving(true);
+
+    if (editId) {
+      await db.transactions.update(editId, {
+        type,
+        amount: amt,
+        categoryId,
+        date,
+        merchant: merchant.trim() || undefined,
+        note: note.trim() || undefined,
+        paymentMethod,
+      });
+      setSaving(false);
+      showToast("Transaction updated.");
+      navigate(`/transaction/${editId}`);
+      return;
+    }
+
     await db.transactions.add({
       type,
       amount: amt,
@@ -130,6 +175,12 @@ export default function AddTransaction() {
           >
             <X size={20} />
           </button>
+        </header>
+      ) : editId ? (
+        <header className="topbar">
+          <div className="eyebrow">Editing</div>
+          <h1>Edit transaction</h1>
+          <div className="sub">Update the details below</div>
         </header>
       ) : (
         <header className="topbar">
@@ -260,9 +311,9 @@ export default function AddTransaction() {
             disabled={saving || categories.length === 0}
             onClick={() => save(false)}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : editId ? "Save changes" : "Save"}
           </button>
-          {!quick && (
+          {!quick && !editId && (
             <button
               className="btn secondary"
               disabled={saving || categories.length === 0}

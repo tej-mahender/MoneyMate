@@ -39,6 +39,32 @@ export function shortDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/** Full weekday + date, e.g. "Thursday, August 6, 2026" — for detail views
+ *  where shortDate's compact "Aug 6" isn't enough context. */
+export function longDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/** Formats a createdAt epoch-ms timestamp as a local date + time, e.g.
+ *  "Aug 6, 2026, 9:41 PM" — safe to pass straight to `new Date()` since this
+ *  is an absolute instant, not a date-only string (the toLocalDateStr concern
+ *  above only applies to yyyy-mm-dd strings). */
+export function fmtDateTime(ms: number): string {
+  return new Date(ms).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function daysInMonth(key: string): number {
   const [y, m] = key.split("-").map(Number);
   return new Date(y, m, 0).getDate();

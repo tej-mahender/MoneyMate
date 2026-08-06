@@ -486,7 +486,6 @@ textarea:focus {
 .dropdown-trigger:hover {
   border-color: var(--surface-border-strong);
 }
-.dropdown-wrap:has(.dropdown-panel) .dropdown-trigger,
 .dropdown-trigger[aria-expanded="true"] {
   border-color: transparent;
   box-shadow:
@@ -494,13 +493,11 @@ textarea:focus {
     0 0 0 4px var(--gold);
 }
 .dropdown-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 50;
-  max-height: 264px;
+  position: fixed;
+  z-index: 100;
+  max-height: 280px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--void-elev);
   border: 1px solid var(--surface-border-strong);
   border-radius: 16px;
@@ -510,16 +507,31 @@ textarea:focus {
   -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border-strong) transparent;
+}
+.dropdown-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.dropdown-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dropdown-panel::-webkit-scrollbar-thumb {
+  background: var(--surface-border-strong);
+  border-radius: 6px;
 }
 .dropdown-option {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
   text-align: left;
   background: none;
   border: none;
   border-radius: 10px;
-  padding: 11px 12px;
+  padding: 12px;
   font-family: var(--sans);
   font-size: 14.5px;
   font-weight: 500;
@@ -528,18 +540,26 @@ textarea:focus {
   transition:
     background 0.12s,
     color 0.12s;
-  white-space: nowrap;
+}
+.dropdown-option span {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dropdown-option:hover {
   background: var(--surface-strong);
   color: var(--ink);
 }
 .dropdown-option.selected {
-  background: var(--aurum-soft);
   color: var(--ink);
   font-weight: 700;
+}
+.dropdown-option.selected:hover {
+  background: var(--surface-strong);
+}
+.dropdown-check {
+  flex-shrink: 0;
+  color: var(--gold);
 }
 
 .cat-edit-row {
@@ -555,6 +575,46 @@ textarea:focus {
 .cat-edit-row input[type="number"] {
   flex: 1;
 }
+
+/* Transaction detail page */
+.detail-amount {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 34px;
+  letter-spacing: -0.01em;
+}
+.detail-amount.income {
+  color: var(--good);
+}
+.detail-category {
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+.detail-row:last-child {
+  border-bottom: none;
+}
+.detail-label {
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.detail-value {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
 .swatch {
   width: 36px;
   height: 36px;
@@ -567,10 +627,8 @@ textarea:focus {
   font-size: 17px;
 }
 .icon-picker-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 50;
+  position: fixed;
+  z-index: 100;
   width: 264px;
   background: var(--void-elev);
   border: 1px solid var(--surface-border-strong);
@@ -648,6 +706,17 @@ textarea:focus {
 }
 .tx:last-child {
   border-bottom: none;
+}
+.tx-link {
+  cursor: pointer;
+  border-radius: 14px;
+  padding-left: 10px;
+  padding-right: 10px;
+  margin: 0 -10px;
+  transition: background 0.12s;
+}
+.tx-link:hover {
+  background: var(--surface-strong);
 }
 .tx-left {
   display: flex;
@@ -804,7 +873,7 @@ textarea:focus {
 
 .fab {
   position: fixed;
-  right: max(20px, calc((100vw - 520px) / 2 + 20px));
+  right: max(35px, calc((100vw - 520px) / 2 + 35px));
   bottom: calc(94px + env(safe-area-inset-bottom) + 12px);
   width: 58px;
   height: 58px;
@@ -822,24 +891,31 @@ textarea:focus {
   justify-content: center;
 }
 
-.toast {
+.toast-wrap {
   position: fixed;
   bottom: 108px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 20px;
+}
+.toast {
   background: var(--surface-strong);
   color: var(--ink);
   padding: 12px 22px;
   border-radius: 24px;
   font-size: 13px;
   font-weight: 600;
-  z-index: 60;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--surface-border-strong);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  max-width: 90%;
+  max-width: 100%;
   text-align: center;
+  pointer-events: auto;
 }
 
 .skeleton {

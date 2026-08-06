@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { EMOJI_OPTIONS } from "../lib/emojiOptions";
+import { useFloatingPosition } from "../lib/useFloatingPosition";
 
 export default function IconPicker({
   icon,
@@ -17,13 +19,17 @@ export default function IconPicker({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const pos = useFloatingPosition(triggerRef, open, 264);
 
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(e: PointerEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -42,6 +48,7 @@ export default function IconPicker({
     <div style={{ position: "relative" }} ref={wrapRef}>
       <button
         type="button"
+        ref={triggerRef}
         className="swatch"
         style={{
           background: color + "33",
@@ -55,63 +62,68 @@ export default function IconPicker({
         {icon}
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="icon-picker-panel"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            <div className="icon-picker-colors">
-              {palette.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className="icon-picker-color-dot"
-                  style={{
-                    background: c,
-                    outline: c === color ? "2px solid var(--gold)" : "none",
-                    outlineOffset: 2,
-                  }}
-                  onClick={() => onColorChange(c)}
-                  aria-label={`Color ${c}`}
-                />
-              ))}
-            </div>
+      {createPortal(
+        <AnimatePresence>
+          {open && pos && (
+            <motion.div
+              ref={panelRef}
+              className="icon-picker-panel"
+              style={{ top: pos.top, left: pos.left }}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+            >
+              <div className="icon-picker-colors">
+                {palette.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="icon-picker-color-dot"
+                    style={{
+                      background: c,
+                      outline: c === color ? "2px solid var(--gold)" : "none",
+                      outlineOffset: 2,
+                    }}
+                    onClick={() => onColorChange(c)}
+                    aria-label={`Color ${c}`}
+                  />
+                ))}
+              </div>
 
-            <div className="icon-picker-grid">
-              {EMOJI_OPTIONS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  className={
-                    "icon-picker-emoji" + (e === icon ? " selected" : "")
-                  }
-                  onClick={() => {
-                    onIconChange(e);
-                    setOpen(false);
-                  }}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
+              <div className="icon-picker-grid">
+                {EMOJI_OPTIONS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    className={
+                      "icon-picker-emoji" + (e === icon ? " selected" : "")
+                    }
+                    onClick={() => {
+                      onIconChange(e);
+                      setOpen(false);
+                    }}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
 
-            <input
-              type="text"
-              placeholder="Or type/paste any emoji…"
-              value=""
-              onChange={(e) => {
-                const val = e.target.value.trim();
-                if (val) onIconChange(Array.from(val)[0]);
-              }}
-              style={{ marginTop: 4 }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <input
+                type="text"
+                placeholder="Or type/paste any emoji…"
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  if (val) onIconChange(Array.from(val)[0]);
+                }}
+                style={{ marginTop: 4 }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

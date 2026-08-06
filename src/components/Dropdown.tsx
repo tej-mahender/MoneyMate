@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
+import { useFloatingPosition } from "../lib/useFloatingPosition";
 
 export interface DropdownOption {
   value: string;
@@ -22,13 +24,17 @@ export default function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const pos = useFloatingPosition(triggerRef, open);
 
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(e: PointerEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -48,6 +54,7 @@ export default function Dropdown({
       <button
         type="button"
         id={id}
+        ref={triggerRef}
         className="dropdown-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -65,33 +72,47 @@ export default function Dropdown({
         />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="dropdown-panel"
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-          >
-            {options.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                className={
-                  "dropdown-option" + (o.value === value ? " selected" : "")
-                }
-                onClick={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {createPortal(
+        <AnimatePresence>
+          {open && pos && (
+            <motion.div
+              ref={panelRef}
+              className="dropdown-panel"
+              role="listbox"
+              style={{ top: pos.top, left: pos.left, width: pos.width }}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
+            >
+              {options.map((o) => {
+                const isSelected = o.value === value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={
+                      "dropdown-option" + (isSelected ? " selected" : "")
+                    }
+                    onClick={() => {
+                      onChange(o.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{o.label}</span>
+                    {isSelected && (
+                      <Check size={15} className="dropdown-check" />
+                    )}
+                  </button>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

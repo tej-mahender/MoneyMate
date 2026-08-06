@@ -12,6 +12,7 @@ import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import AddTransaction from "./pages/AddTransaction";
 import History from "./pages/History";
+import TransactionDetail from "./pages/TransactionDetail";
 import Analytics from "./pages/Analytics";
 import SettingsPage from "./pages/Settings";
 import BottomNav from "./components/BottomNav";
@@ -52,6 +53,10 @@ function AnimatedRoutes({
             <Route
               path="/history"
               element={<History currency={settings.currency} />}
+            />
+            <Route
+              path="/transaction/:id"
+              element={<TransactionDetail currency={settings.currency} />}
             />
             <Route
               path="/analytics"
