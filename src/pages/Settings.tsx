@@ -45,8 +45,13 @@ export default function Settings({
   const showToast = useUIStore((s) => s.showToast);
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const recurring = useLiveQuery(() => db.recurring.toArray(), []) ?? [];
-  const expenseCategories = categories.filter((c) => c.type !== "income");
-  const incomeCategories = categories.filter((c) => c.type === "income");
+  const expenseCategories = categories.filter(
+    (c) => c.type !== "income" && !c.archived,
+  );
+  const incomeCategories = categories.filter(
+    (c) => c.type === "income" && !c.archived,
+  );
+  const archivedCategories = categories.filter((c) => c.archived);
 
   const [draftCats, setDraftCats] = useState<Category[]>([]);
   useEffect(
@@ -71,9 +76,53 @@ export default function Settings({
       },
     ]);
   }
+  // Deleting a category outright silently orphans any transaction that
+  // pointed at it — they'd just fall back to showing as "Uncategorized"
+  // everywhere with no warning, and quietly drop out of that category's
+  // historical totals in Analytics. For a category with real history,
+  // archiving (hide it going forward, keep everything already attached to
+  // it exactly as-is) is almost always what's actually wanted instead — so
+  // offer that as the default path rather than losing the association by
+  // surprise.
+  async function deleteOrArchiveCategory(
+    cat: Category,
+  ): Promise<"deleted" | "archived" | "cancelled"> {
+    if (!cat.id) return "cancelled"; // an unsaved draft row — nothing in the DB to touch
+    const count = await db.transactions
+      .where("categoryId")
+      .equals(cat.id)
+      .count();
+    if (count > 0) {
+      const wantsDelete = confirm(
+        `"${cat.name || "This category"}" has ${count} transaction${count === 1 ? "" : "s"}. Deleting it permanently will show ${count === 1 ? "that one" : "those"} as "Uncategorized" and drop ${count === 1 ? "it" : "them"} out of this category's history in Analytics.\n\nPress OK to delete anyway, or Cancel to archive it instead — hides it from new transactions while keeping your existing history exactly as it is.`,
+      );
+      if (!wantsDelete) {
+        const wantsArchive = confirm(
+          `Archive "${cat.name || "this category"}"? It'll disappear from new transactions but your existing history stays untouched. You can restore it later from Settings.`,
+        );
+        if (!wantsArchive) return "cancelled";
+        await db.categories.update(cat.id, { archived: true });
+        showToast(`Archived "${cat.name || "category"}".`);
+        return "archived";
+      }
+    }
+    await db.categories.delete(cat.id);
+    showToast(
+      count > 0
+        ? `Deleted "${cat.name || "category"}" — its ${count} transaction${count === 1 ? "" : "s"} are now Uncategorized.`
+        : `Deleted "${cat.name || "category"}".`,
+    );
+    return "deleted";
+  }
+  async function restoreCategory(cat: Category) {
+    if (!cat.id) return;
+    await db.categories.update(cat.id, { archived: false });
+    showToast(`Restored "${cat.name}".`);
+  }
   async function removeCat(i: number) {
     const cat = draftCats[i];
-    if (cat.id) await db.categories.delete(cat.id);
+    const result = await deleteOrArchiveCategory(cat);
+    if (result === "cancelled") return;
     setDraftCats((prev) => prev.filter((_, idx) => idx !== i));
   }
   async function saveCats() {
@@ -129,7 +178,8 @@ export default function Settings({
   }
   async function removeIncomeCat(i: number) {
     const cat = draftIncomeCats[i];
-    if (cat.id) await db.categories.delete(cat.id);
+    const result = await deleteOrArchiveCategory(cat);
+    if (result === "cancelled") return;
     setDraftIncomeCats((prev) => prev.filter((_, idx) => idx !== i));
   }
   async function saveIncomeCats() {
@@ -390,6 +440,47 @@ export default function Settings({
           </button>
         </div>
 
+        {archivedCategories.length > 0 && (
+          <div className="card">
+            <h2>Archived categories</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Hidden from new transactions, but their existing history is
+              untouched. Restore one to use it again.
+            </p>
+            {archivedCategories.map((c) => (
+              <div className="tx" key={c.id}>
+                <div className="tx-left">
+                  <div
+                    className="tx-icon"
+                    style={{
+                      background: (c.color || "#888") + "26",
+                      color: c.color,
+                    }}
+                  >
+                    {c.icon}
+                  </div>
+                  <div className="tx-meta">
+                    <div className="tx-cat">{c.name}</div>
+                    <div className="tx-note">
+                      {c.type === "income"
+                        ? "Income source"
+                        : "Expense category"}
+                    </div>
+                  </div>
+                </div>
+                <div className="tx-right">
+                  <button
+                    className="btn small secondary"
+                    onClick={() => restoreCategory(c)}
+                  >
+                    Restore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="card">
           <h2>Recurring transactions</h2>
           {recurring.length === 0 ? (
@@ -598,8 +689,7 @@ export default function Settings({
         <div className="card">
           <h2>About</h2>
           <p className="muted">
-            Personal Finance OS — zero login, zero ads, zero subscription, zero
-            analytics, zero tracking. Installable to your home screen and fully
+            Money Mate — zero login, zero ads, zero subscription. Installable to your home screen and fully
             usable offline.
           </p>
         </div>
