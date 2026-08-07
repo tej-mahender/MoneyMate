@@ -8,6 +8,7 @@ import {
 import { PiggyBank, IndianRupee, CreditCard, X } from "lucide-react";
 import IconPicker from "../components/IconPicker";
 import moneyMateIcon from "../assets/moneymate-icon.png";
+import moneyMateIconWebp from "../assets/moneymate-icon.webp";
 
 const CURRENCIES = ["₹", "$", "€", "£"];
 
@@ -126,7 +127,17 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       <div className="shell-inner">
         {step === 0 && (
           <div className="splash-hero">
-            <img src={moneyMateIcon} alt="MoneyMate" className="icon-mark" />
+            <picture>
+              <source srcSet={moneyMateIconWebp} type="image/webp" />
+              <picture>
+                <source srcSet={moneyMateIconWebp} type="image/webp" />
+                <img
+                  src={moneyMateIcon}
+                  alt="MoneyMate"
+                  className="icon-mark"
+                />
+              </picture>
+            </picture>
             <h1 className="wordmark">
               <span className="money">Money</span>
               <span className="mate">Mate</span>
