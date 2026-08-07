@@ -58,7 +58,7 @@ Then either:
 Once the app is installed once (so it can write its first snapshot):
 1. Long-press an empty area of your Android home screen.
 2. Tap **Widgets**.
-3. Find **Personal Finance OS** → **Glanceable monthly balance**.
+3. Find **Money Mate** → **Glanceable monthly balance**.
 4. Drag it onto your home screen, resize if you like.
 5. Open the app once and add/view a transaction — the widget updates within a
    second via the instant-push path; after that it also self-refreshes every 30

@@ -1,4 +1,4 @@
-# Personal Finance OS (PFOS) — v2
+# Money Mate — v2
 
 A private, offline-first personal finance tracker. No login, no cloud, no ads, no
 analytics, no subscriptions. Every byte of data stays in this browser's IndexedDB,

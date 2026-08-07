@@ -1,80 +1,176 @@
-import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { useMemo, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "../db/db";
 import {
-  fmtMoney, monthKey, monthLabel, todayISO, addMonths, weekdayName, isoWeek, daysBetween,
-} from '../lib/format';
-import { PieChart as PieChartIcon, BarChart3, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+  fmtMoney,
+  monthKey,
+  monthLabel,
+  todayISO,
+  addMonths,
+  weekdayName,
+  isoWeek,
+  daysBetween,
+} from "../lib/format";
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-  BarChart, Bar, Legend, AreaChart, Area,
-} from 'recharts';
+  PieChart as PieChartIcon,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+} from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  Legend,
+  AreaChart,
+  Area,
+} from "recharts";
 
-type Range = 'month' | '3m' | '6m' | '1y' | 'all';
-const RANGE_MONTHS: Record<Range, number> = { month: 1, '3m': 3, '6m': 6, '1y': 12, all: 999 };
-const RANGE_LABEL: Record<Range, string> = { month: 'This month', '3m': '3 months', '6m': '6 months', '1y': '1 year', all: 'All time' };
+type Range = "month" | "3m" | "6m" | "1y" | "all";
+const RANGE_MONTHS: Record<Range, number> = {
+  month: 1,
+  "3m": 3,
+  "6m": 6,
+  "1y": 12,
+  all: 999,
+};
+const RANGE_LABEL: Record<Range, string> = {
+  month: "This month",
+  "3m": "3 months",
+  "6m": "6 months",
+  "1y": "1 year",
+  all: "All time",
+};
 
-const WEEKDAY_ORDER = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const SERIES_COLORS = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#6FC98A'];
+const WEEKDAY_ORDER = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+const SERIES_COLORS = [
+  "#F0B94D",
+  "#4FD9B8",
+  "#7C93F0",
+  "#E8618C",
+  "#B98CF0",
+  "#6FC98A",
+];
 
 export default function Analytics({ currency }: { currency: string }) {
-  const [range, setRange] = useState<Range>('month');
+  const [range, setRange] = useState<Range>("month");
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const catMap = new Map(categories.map((c) => [c.id, c]));
   const curMonth = monthKey(todayISO());
 
   const startMonth = useMemo(() => {
-    if (range === 'all') {
-      const earliest = txs.reduce((min, t) => (monthKey(t.date) < min ? monthKey(t.date) : min), curMonth);
+    if (range === "all") {
+      const earliest = txs.reduce(
+        (min, t) => (monthKey(t.date) < min ? monthKey(t.date) : min),
+        curMonth,
+      );
       return earliest;
     }
     return addMonths(curMonth, -(RANGE_MONTHS[range] - 1));
   }, [range, txs, curMonth]);
 
   const rangeTx = useMemo(
-    () => txs.filter((t) => monthKey(t.date) >= startMonth && monthKey(t.date) <= curMonth),
-    [txs, startMonth, curMonth]
+    () =>
+      txs.filter(
+        (t) => monthKey(t.date) >= startMonth && monthKey(t.date) <= curMonth,
+      ),
+    [txs, startMonth, curMonth],
   );
-  const rangeExpenses = rangeTx.filter((t) => t.type === 'expense');
+  const rangeExpenses = rangeTx.filter((t) => t.type === "expense");
 
   // This-month-only slice, since budgets are inherently monthly
-  const monthTx = txs.filter((t) => monthKey(t.date) === curMonth && t.type === 'expense');
+  const monthTx = txs.filter(
+    (t) => monthKey(t.date) === curMonth && t.type === "expense",
+  );
 
   const pieData = useMemo(() => {
     const byCat = new Map<number, number>();
-    rangeExpenses.forEach((t) => byCat.set(t.categoryId, (byCat.get(t.categoryId) || 0) + t.amount));
+    rangeExpenses.forEach((t) =>
+      byCat.set(t.categoryId, (byCat.get(t.categoryId) || 0) + t.amount),
+    );
     return Array.from(byCat.entries())
-      .map(([id, val]) => ({ name: catMap.get(id)?.name || 'Other', value: val, color: catMap.get(id)?.color || '#888' }))
+      .map(([id, val]) => ({
+        name: catMap.get(id)?.name || "Other",
+        value: val,
+        color: catMap.get(id)?.color || "#888",
+      }))
       .sort((a, b) => b.value - a.value);
   }, [rangeExpenses, categories]);
 
   const monthKeys = useMemo(() => {
     const keys: string[] = [];
     let k = startMonth;
-    while (k <= curMonth) { keys.push(k); k = addMonths(k, 1); }
+    while (k <= curMonth) {
+      keys.push(k);
+      k = addMonths(k, 1);
+    }
     return keys;
   }, [startMonth, curMonth]);
 
-  const trendData = useMemo(() => monthKeys.map((m) => {
-    const spend = txs.filter((t) => monthKey(t.date) === m && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const income = txs.filter((t) => monthKey(t.date) === m && t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    return { month: monthLabel(m).split(' ')[0] + (monthKeys.length > 12 ? " '" + m.slice(2, 4) : ''), spend, income, savings: income - spend };
-  }), [monthKeys, txs]);
+  const trendData = useMemo(
+    () =>
+      monthKeys.map((m) => {
+        const spend = txs
+          .filter((t) => monthKey(t.date) === m && t.type === "expense")
+          .reduce((s, t) => s + t.amount, 0);
+        const income = txs
+          .filter((t) => monthKey(t.date) === m && t.type === "income")
+          .reduce((s, t) => s + t.amount, 0);
+        return {
+          month:
+            monthLabel(m).split(" ")[0] +
+            (monthKeys.length > 12 ? " '" + m.slice(2, 4) : ""),
+          spend,
+          income,
+          savings: income - spend,
+        };
+      }),
+    [monthKeys, txs],
+  );
 
   // Category trend: top categories as stacked area across months
   const categoryTrend = useMemo(() => {
     const totals = new Map<number, number>();
-    rangeExpenses.forEach((t) => totals.set(t.categoryId, (totals.get(t.categoryId) || 0) + t.amount));
-    const topIds = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => id);
+    rangeExpenses.forEach((t) =>
+      totals.set(t.categoryId, (totals.get(t.categoryId) || 0) + t.amount),
+    );
+    const topIds = Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id);
     return {
       topIds,
       data: monthKeys.map((m) => {
-        const row: Record<string, string | number> = { month: monthLabel(m).split(' ')[0] };
+        const row: Record<string, string | number> = {
+          month: monthLabel(m).split(" ")[0],
+        };
         topIds.forEach((id) => {
-          row[catMap.get(id)?.name || 'Other'] = txs
-            .filter((t) => monthKey(t.date) === m && t.type === 'expense' && t.categoryId === id)
+          row[catMap.get(id)?.name || "Other"] = txs
+            .filter(
+              (t) =>
+                monthKey(t.date) === m &&
+                t.type === "expense" &&
+                t.categoryId === id,
+            )
             .reduce((s, t) => s + t.amount, 0);
         });
         return row;
@@ -93,48 +189,65 @@ export default function Analytics({ currency }: { currency: string }) {
     return WEEKDAY_ORDER.map((w) => ({
       day: w.slice(0, 3),
       total: totals.get(w)!.total,
-      avg: totals.get(w)!.count ? totals.get(w)!.total / totals.get(w)!.count : 0,
+      avg: totals.get(w)!.count
+        ? totals.get(w)!.total / totals.get(w)!.count
+        : 0,
     }));
   }, [rangeExpenses]);
 
   // Daily spend + 7-day rolling average — bucket weekly instead if the range spans a lot of days
   const dailySeries = useMemo(() => {
-    const spanDays = daysBetween(startMonth + '-01', curMonth + '-01') + 31;
+    const spanDays = daysBetween(startMonth + "-01", curMonth + "-01") + 31;
     const byDay = new Map<string, number>();
-    rangeExpenses.forEach((t) => byDay.set(t.date, (byDay.get(t.date) || 0) + t.amount));
+    rangeExpenses.forEach((t) =>
+      byDay.set(t.date, (byDay.get(t.date) || 0) + t.amount),
+    );
 
     if (spanDays <= 100) {
       const days: string[] = [];
-      let cursor = startMonth + '-01';
+      let cursor = startMonth + "-01";
       const end = todayISO();
       while (cursor <= end && monthKey(cursor) <= curMonth) {
         days.push(cursor);
-        const d = new Date(cursor + 'T00:00:00');
+        const d = new Date(cursor + "T00:00:00");
         d.setDate(d.getDate() + 1);
         const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
         cursor = `${y}-${m}-${day}`;
       }
       return days.map((d, i) => {
         const windowStart = Math.max(0, i - 6);
         const window = days.slice(windowStart, i + 1);
-        const avg = window.reduce((s, wd) => s + (byDay.get(wd) || 0), 0) / window.length;
-        return { label: d.slice(5), spend: byDay.get(d) || 0, avg: Math.round(avg) };
+        const avg =
+          window.reduce((s, wd) => s + (byDay.get(wd) || 0), 0) / window.length;
+        return {
+          label: d.slice(5),
+          spend: byDay.get(d) || 0,
+          avg: Math.round(avg),
+        };
       });
     }
     // Weekly bucket fallback for long ranges
     const byWeek = new Map<string, number>();
     rangeExpenses.forEach((t) => {
-      const key = new Date(t.date + 'T00:00:00').getFullYear() + '-W' + String(isoWeek(t.date)).padStart(2, '0');
+      const key =
+        new Date(t.date + "T00:00:00").getFullYear() +
+        "-W" +
+        String(isoWeek(t.date)).padStart(2, "0");
       byWeek.set(key, (byWeek.get(key) || 0) + t.amount);
     });
     const weeks = Array.from(byWeek.keys()).sort();
     return weeks.map((w, i) => {
       const windowStart = Math.max(0, i - 3);
       const window = weeks.slice(windowStart, i + 1);
-      const avg = window.reduce((s, wk) => s + (byWeek.get(wk) || 0), 0) / window.length;
-      return { label: w.slice(6), spend: byWeek.get(w) || 0, avg: Math.round(avg) };
+      const avg =
+        window.reduce((s, wk) => s + (byWeek.get(wk) || 0), 0) / window.length;
+      return {
+        label: w.slice(6),
+        spend: byWeek.get(w) || 0,
+        avg: Math.round(avg),
+      };
     });
   }, [rangeExpenses, startMonth, curMonth]);
 
@@ -145,7 +258,9 @@ export default function Analytics({ currency }: { currency: string }) {
       if (!key) return;
       byMerchant.set(key, (byMerchant.get(key) || 0) + t.amount);
     });
-    return Array.from(byMerchant.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return Array.from(byMerchant.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
   }, [rangeExpenses]);
 
   // Statistical insights — plain arithmetic today, but structured as the first pass
@@ -156,23 +271,54 @@ export default function Analytics({ currency }: { currency: string }) {
     const avgTx = txCount ? totalSpent / txCount : 0;
 
     const byDay = new Map<string, number>();
-    rangeExpenses.forEach((t) => byDay.set(t.date, (byDay.get(t.date) || 0) + t.amount));
-    let peakDay = '', peakAmt = 0;
-    byDay.forEach((amt, day) => { if (amt > peakAmt) { peakAmt = amt; peakDay = day; } });
+    rangeExpenses.forEach((t) =>
+      byDay.set(t.date, (byDay.get(t.date) || 0) + t.amount),
+    );
+    let peakDay = "",
+      peakAmt = 0;
+    byDay.forEach((amt, day) => {
+      if (amt > peakAmt) {
+        peakAmt = amt;
+        peakDay = day;
+      }
+    });
 
     const byCatCount = new Map<number, number>();
-    rangeExpenses.forEach((t) => byCatCount.set(t.categoryId, (byCatCount.get(t.categoryId) || 0) + 1));
-    let topCatId: number | null = null, topCatCount = 0;
-    byCatCount.forEach((c, id) => { if (c > topCatCount) { topCatCount = c; topCatId = id; } });
+    rangeExpenses.forEach((t) =>
+      byCatCount.set(t.categoryId, (byCatCount.get(t.categoryId) || 0) + 1),
+    );
+    let topCatId: number | null = null,
+      topCatCount = 0;
+    byCatCount.forEach((c, id) => {
+      if (c > topCatCount) {
+        topCatCount = c;
+        topCatId = id;
+      }
+    });
 
     const prevStart = addMonths(startMonth, -RANGE_MONTHS[range]);
     const prevEnd = addMonths(startMonth, -1);
     const prevSpent = txs
-      .filter((t) => t.type === 'expense' && monthKey(t.date) >= prevStart && monthKey(t.date) <= prevEnd)
+      .filter(
+        (t) =>
+          t.type === "expense" &&
+          monthKey(t.date) >= prevStart &&
+          monthKey(t.date) <= prevEnd,
+      )
       .reduce((s, t) => s + t.amount, 0);
-    const momPct = prevSpent > 0 ? ((totalSpent - prevSpent) / prevSpent) * 100 : null;
+    const momPct =
+      prevSpent > 0 ? ((totalSpent - prevSpent) / prevSpent) * 100 : null;
 
-    return { totalSpent, txCount, avgTx, peakDay, peakAmt, topCatId, topCatCount, momPct };
+    return {
+      totalSpent,
+      txCount,
+      avgTx,
+      peakDay,
+      peakAmt,
+      topCatId,
+      topCatCount,
+      momPct,
+    };
   }, [rangeExpenses, txs, startMonth, range]);
 
   const topCategory = pieData[0];
@@ -187,7 +333,11 @@ export default function Analytics({ currency }: { currency: string }) {
       <div className="content">
         <div className="chip-row" style={{ marginBottom: 16 }}>
           {(Object.keys(RANGE_LABEL) as Range[]).map((r) => (
-            <button key={r} className={'chip' + (range === r ? ' active' : '')} onClick={() => setRange(r)}>
+            <button
+              key={r}
+              className={"chip" + (range === r ? " active" : "")}
+              onClick={() => setRange(r)}
+            >
               {RANGE_LABEL[r]}
             </button>
           ))}
@@ -196,23 +346,63 @@ export default function Analytics({ currency }: { currency: string }) {
         <div className="card">
           <h2>At a glance</h2>
           <div className="grid-3" style={{ marginBottom: 0 }}>
-            <div><div className="label">Spent</div><div className="value">{fmtMoney(insights.totalSpent, currency)}</div></div>
-            <div><div className="label">Transactions</div><div className="value">{insights.txCount}</div></div>
-            <div><div className="label">Avg / tx</div><div className="value">{fmtMoney(insights.avgTx, currency)}</div></div>
+            <div>
+              <div className="label">Spent</div>
+              <div className="value">
+                {fmtMoney(insights.totalSpent, currency)}
+              </div>
+            </div>
+            <div>
+              <div className="label">Transactions</div>
+              <div className="value">{insights.txCount}</div>
+            </div>
+            <div>
+              <div className="label">Avg / tx</div>
+              <div className="value">{fmtMoney(insights.avgTx, currency)}</div>
+            </div>
           </div>
-          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
             {insights.momPct !== null && (
               <InsightRow
-                icon={insights.momPct > 2 ? <TrendingUp size={15} /> : insights.momPct < -2 ? <TrendingDown size={15} /> : <Minus size={15} />}
-                color={insights.momPct > 2 ? 'var(--over)' : insights.momPct < -2 ? 'var(--good)' : 'var(--ink-soft)'}
-                text={`${insights.momPct > 0 ? 'Up' : 'Down'} ${Math.abs(insights.momPct).toFixed(0)}% vs. the previous period`}
+                icon={
+                  insights.momPct > 2 ? (
+                    <TrendingUp size={15} />
+                  ) : insights.momPct < -2 ? (
+                    <TrendingDown size={15} />
+                  ) : (
+                    <Minus size={15} />
+                  )
+                }
+                color={
+                  insights.momPct > 2
+                    ? "var(--over)"
+                    : insights.momPct < -2
+                      ? "var(--good)"
+                      : "var(--ink-soft)"
+                }
+                text={`${insights.momPct > 0 ? "Up" : "Down"} ${Math.abs(insights.momPct).toFixed(0)}% vs. the previous period`}
               />
             )}
             {insights.peakDay && (
-              <InsightRow icon={<TrendingUp size={15} />} color="var(--gold)" text={`Biggest spend day: ${insights.peakDay} at ${fmtMoney(insights.peakAmt, currency)}`} />
+              <InsightRow
+                icon={<TrendingUp size={15} />}
+                color="var(--gold)"
+                text={`Biggest spend day: ${insights.peakDay} at ${fmtMoney(insights.peakAmt, currency)}`}
+              />
             )}
             {insights.topCatId && (
-              <InsightRow icon={<PieChartIcon size={15} />} color="var(--rose)" text={`Most frequent category: ${catMap.get(insights.topCatId)?.name} (${insights.topCatCount} transactions)`} />
+              <InsightRow
+                icon={<PieChartIcon size={15} />}
+                color="var(--rose)"
+                text={`Most frequent category: ${catMap.get(insights.topCatId)?.name} (${insights.topCatCount} transactions)`}
+              />
             )}
           </div>
         </div>
@@ -220,19 +410,49 @@ export default function Analytics({ currency }: { currency: string }) {
         <div className="card">
           <h2>Where it went</h2>
           {pieData.length === 0 ? (
-            <div className="empty"><div className="glyph"><PieChartIcon size={30} strokeWidth={1.5} /></div>Nothing to chart yet — log a few expenses.</div>
+            <div className="empty">
+              <div className="glyph">
+                <PieChartIcon size={30} strokeWidth={1.5} />
+              </div>
+              Nothing to chart yet — log a few expenses.
+            </div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} stroke="var(--void-elev)" strokeWidth={2} />)}
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={2}
+                  >
+                    {pieData.map((entry, i) => (
+                      <Cell
+                        key={i}
+                        fill={entry.color}
+                        stroke="var(--void-elev)"
+                        strokeWidth={2}
+                      />
+                    ))}
                   </Pie>
-                  <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
+                  <Tooltip
+                    formatter={(v) => fmtMoney(Number(v), currency)}
+                    contentStyle={tooltipStyle}
+                  />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="muted" style={{ textAlign: 'center', marginTop: -8 }}>
-                Top: <b style={{ color: 'var(--ink)' }}>{topCategory?.name}</b> at {insights.totalSpent > 0 ? ((topCategory.value / insights.totalSpent) * 100).toFixed(0) : 0}% of spend
+              <div
+                className="muted"
+                style={{ textAlign: "center", marginTop: -8 }}
+              >
+                Top: <b style={{ color: "var(--ink)" }}>{topCategory?.name}</b>{" "}
+                at{" "}
+                {insights.totalSpent > 0
+                  ? ((topCategory.value / insights.totalSpent) * 100).toFixed(0)
+                  : 0}
+                % of spend
               </div>
             </>
           )}
@@ -242,12 +462,32 @@ export default function Analytics({ currency }: { currency: string }) {
           <h2>Income vs. spend</h2>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--surface-border)"
+              />
               <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={11} />
               <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
-              <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
-              <Line type="monotone" dataKey="spend" stroke="var(--over)" strokeWidth={2} dot={false} name="Spend" />
-              <Line type="monotone" dataKey="income" stroke="var(--good)" strokeWidth={2} dot={false} name="Income" />
+              <Tooltip
+                formatter={(v) => fmtMoney(Number(v), currency)}
+                contentStyle={tooltipStyle}
+              />
+              <Line
+                type="monotone"
+                dataKey="spend"
+                stroke="var(--over)"
+                strokeWidth={2}
+                dot={false}
+                name="Spend"
+              />
+              <Line
+                type="monotone"
+                dataKey="income"
+                stroke="var(--good)"
+                strokeWidth={2}
+                dot={false}
+                name="Income"
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -257,14 +497,25 @@ export default function Analytics({ currency }: { currency: string }) {
             <h2>Category trend</h2>
             <ResponsiveContainer width="100%" height={210}>
               <AreaChart data={categoryTrend.data}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--surface-border)"
+                />
                 <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={11} />
                 <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
-                <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
+                <Tooltip
+                  formatter={(v) => fmtMoney(Number(v), currency)}
+                  contentStyle={tooltipStyle}
+                />
                 {categoryTrend.topIds.map((id, i) => (
                   <Area
-                    key={id} type="monotone" dataKey={catMap.get(id)?.name || 'Other'} stackId="1"
-                    stroke={SERIES_COLORS[i % SERIES_COLORS.length]} fill={SERIES_COLORS[i % SERIES_COLORS.length]} fillOpacity={0.35}
+                    key={id}
+                    type="monotone"
+                    dataKey={catMap.get(id)?.name || "Other"}
+                    stackId="1"
+                    stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                    fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+                    fillOpacity={0.35}
                   />
                 ))}
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -277,12 +528,36 @@ export default function Analytics({ currency }: { currency: string }) {
           <h2>Daily spend &amp; 7-day average</h2>
           <ResponsiveContainer width="100%" height={190}>
             <AreaChart data={dailySeries}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
-              <XAxis dataKey="label" stroke="var(--ink-soft)" fontSize={10} interval="preserveStartEnd" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--surface-border)"
+              />
+              <XAxis
+                dataKey="label"
+                stroke="var(--ink-soft)"
+                fontSize={10}
+                interval="preserveStartEnd"
+              />
               <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
-              <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
-              <Area type="monotone" dataKey="spend" stroke="var(--ink-faint)" fill="var(--surface-strong)" name="Daily" />
-              <Line type="monotone" dataKey="avg" stroke="var(--gold)" strokeWidth={2} dot={false} name="Rolling avg" />
+              <Tooltip
+                formatter={(v) => fmtMoney(Number(v), currency)}
+                contentStyle={tooltipStyle}
+              />
+              <Area
+                type="monotone"
+                dataKey="spend"
+                stroke="var(--ink-faint)"
+                fill="var(--surface-strong)"
+                name="Daily"
+              />
+              <Line
+                type="monotone"
+                dataKey="avg"
+                stroke="var(--gold)"
+                strokeWidth={2}
+                dot={false}
+                name="Rolling avg"
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -291,10 +566,16 @@ export default function Analytics({ currency }: { currency: string }) {
           <h2>Spending by day of week</h2>
           <ResponsiveContainer width="100%" height={190}>
             <BarChart data={weekdayData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--surface-border)"
+              />
               <XAxis dataKey="day" stroke="var(--ink-soft)" fontSize={11} />
               <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
-              <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
+              <Tooltip
+                formatter={(v) => fmtMoney(Number(v), currency)}
+                contentStyle={tooltipStyle}
+              />
               <Bar dataKey="total" fill="var(--gold)" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -306,10 +587,19 @@ export default function Analytics({ currency }: { currency: string }) {
             {topMerchants.map(([name, amt], i) => (
               <div className="tx" key={name}>
                 <div className="tx-left">
-                  <div className="tx-icon" style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] + '26', color: SERIES_COLORS[i % SERIES_COLORS.length] }}>
+                  <div
+                    className="tx-icon"
+                    style={{
+                      background:
+                        SERIES_COLORS[i % SERIES_COLORS.length] + "26",
+                      color: SERIES_COLORS[i % SERIES_COLORS.length],
+                    }}
+                  >
                     {i + 1}
                   </div>
-                  <div className="tx-meta"><div className="tx-cat">{name}</div></div>
+                  <div className="tx-meta">
+                    <div className="tx-cat">{name}</div>
+                  </div>
                 </div>
                 <span className="tx-amt">{fmtMoney(amt, currency)}</span>
               </div>
@@ -318,26 +608,73 @@ export default function Analytics({ currency }: { currency: string }) {
         )}
 
         <div className="card">
-          <h2>Budget vs actual <span className="muted" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{monthLabel(curMonth)}</span></h2>
-          {categories.length === 0 ? (
-            <div className="empty"><div className="glyph"><BarChart3 size={30} strokeWidth={1.5} /></div>Add categories to compare.</div>
+          <h2>
+            Budget vs actual{" "}
+            <span
+              className="muted"
+              style={{ fontFamily: "var(--mono)", fontSize: 11 }}
+            >
+              {monthLabel(curMonth)}
+            </span>
+          </h2>
+          {categories.filter((c) => c.type !== "income").length === 0 ? (
+            <div className="empty">
+              <div className="glyph">
+                <BarChart3 size={30} strokeWidth={1.5} />
+              </div>
+              Add categories to compare.
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(160, categories.length * 44)}>
+            <ResponsiveContainer
+              width="100%"
+              height={Math.max(
+                160,
+                categories.filter((c) => c.type !== "income").length * 44,
+              )}
+            >
               <BarChart
-                data={categories.map((c) => ({
-                  name: c.name.length > 8 ? c.name.slice(0, 7) + '…' : c.name,
-                  budget: c.budget,
-                  actual: monthTx.filter((t) => t.categoryId === c.id).reduce((s, t) => s + t.amount, 0),
-                }))}
-                layout="vertical" margin={{ left: 10 }}
+                data={categories
+                  .filter((c) => c.type !== "income")
+                  .map((c) => ({
+                    name: c.name.length > 8 ? c.name.slice(0, 7) + "…" : c.name,
+                    budget: c.budget,
+                    actual: monthTx
+                      .filter((t) => t.categoryId === c.id)
+                      .reduce((s, t) => s + t.amount, 0),
+                  }))}
+                layout="vertical"
+                margin={{ left: 10 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" horizontal={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--surface-border)"
+                  horizontal={false}
+                />
                 <XAxis type="number" stroke="var(--ink-soft)" fontSize={11} />
-                <YAxis type="category" dataKey="name" stroke="var(--ink-soft)" fontSize={11} width={64} />
-                <Tooltip formatter={(v) => fmtMoney(Number(v), currency)} contentStyle={tooltipStyle} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke="var(--ink-soft)"
+                  fontSize={11}
+                  width={64}
+                />
+                <Tooltip
+                  formatter={(v) => fmtMoney(Number(v), currency)}
+                  contentStyle={tooltipStyle}
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="budget" fill="var(--ink-faint)" radius={[0, 4, 4, 0]} name="Budget" />
-                <Bar dataKey="actual" fill="var(--gold)" radius={[0, 4, 4, 0]} name="Actual" />
+                <Bar
+                  dataKey="budget"
+                  fill="var(--ink-faint)"
+                  radius={[0, 4, 4, 0]}
+                  name="Budget"
+                />
+                <Bar
+                  dataKey="actual"
+                  fill="var(--gold)"
+                  radius={[0, 4, 4, 0]}
+                  name="Actual"
+                />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -347,19 +684,29 @@ export default function Analytics({ currency }: { currency: string }) {
   );
 }
 
-function InsightRow({ icon, color, text }: { icon: React.ReactNode; color: string; text: string }) {
+function InsightRow({
+  icon,
+  color,
+  text,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  text: string;
+}) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-      <span style={{ color, flexShrink: 0, display: 'flex' }}>{icon}</span>
-      <span style={{ color: 'var(--ink-soft)' }}>{text}</span>
+    <div
+      style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}
+    >
+      <span style={{ color, flexShrink: 0, display: "flex" }}>{icon}</span>
+      <span style={{ color: "var(--ink-soft)" }}>{text}</span>
     </div>
   );
 }
 
 const tooltipStyle = {
-  background: 'var(--void-elev)',
-  border: '1px solid var(--surface-border)',
+  background: "var(--void-elev)",
+  border: "1px solid var(--surface-border)",
   borderRadius: 10,
   fontSize: 12,
-  color: 'var(--ink)',
+  color: "var(--ink)",
 };
