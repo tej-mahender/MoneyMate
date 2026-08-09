@@ -49,24 +49,16 @@ export default function CalendarHeatmap({
   function bg(level: number): string {
     if (level < 0) return "transparent";
     if (level === 0) return "var(--void-elev)";
-    // interpolate between good and over via warn using level
-    if (level < 0.34)
-      return (
-        "color-mix(in srgb, var(--good) " +
-        Math.round(30 + level * 150) +
-        "%, var(--void-elev))"
-      );
-    if (level < 0.7)
-      return (
-        "color-mix(in srgb, var(--warn) " +
-        Math.round(40 + level * 90) +
-        "%, var(--void-elev))"
-      );
-    return (
-      "color-mix(in srgb, var(--over) " +
-      Math.round(50 + level * 80) +
-      "%, var(--void-elev))"
-    );
+    // Single-hue intensity scale (like GitHub's contribution graph) rather
+    // than a green/orange/red judgment scale — a heavier day here (rent,
+    // an annual subscription, a big grocery run) is completely normal, not
+    // a "problem," and coloring it the same red the Dashboard's budget ring
+    // uses for "over budget" was actively misleading. This just answers
+    // "how much, relative to this month's own days" with no implication
+    // about whether that was good or bad — the brand color ramps from
+    // faint to fully saturated, nothing more.
+    const pct = Math.round(15 + level * 85); // always in-range: 15%–100%
+    return `color-mix(in srgb, var(--gold) ${pct}%, var(--void-elev))`;
   }
 
   const activeDay = selected || (cells.includes(today) ? today : null);
@@ -131,7 +123,10 @@ export default function CalendarHeatmap({
                 justifyContent: "center",
                 fontFamily: "var(--mono)",
                 fontSize: 10.5,
-                color: lvl > 0.5 ? "#fff" : "var(--ink-soft)",
+                // --gold is a bright, light green — high-intensity cells
+                // need dark text for contrast, same pairing already used
+                // on the gold FAB button elsewhere in the app.
+                color: lvl > 0.55 ? "#02291D" : "var(--ink-soft)",
                 padding: 0,
               }}
             >

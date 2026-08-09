@@ -1,12 +1,6 @@
-import Papa from "papaparse";
-import {
-  db,
-  type Category,
-  type Transaction,
-  type Recurring,
-  type Settings,
-} from "../db/db";
-import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from "./format";
+import Papa from 'papaparse';
+import { db, type Category, type Transaction, type Recurring, type Settings } from '../db/db';
+import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from './format';
 
 export const SCHEMA_VERSION = 3;
 
@@ -30,19 +24,14 @@ async function loadAll() {
 
 /** Flat, ML/BI-ready transaction records: one row per transaction with every
  *  date feature a model or Power BI pivot would otherwise have to recompute. */
-function enrichedTransactionRows(
-  transactions: Transaction[],
-  categories: Category[],
-) {
+function enrichedTransactionRows(transactions: Transaction[], categories: Category[]) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
   let running = 0;
   return transactions
     .slice()
-    .sort((a, b) =>
-      a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1,
-    )
+    .sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1))
     .map((t) => {
-      running += t.type === "income" ? t.amount : -t.amount;
+      running += t.type === 'income' ? t.amount : -t.amount;
       const cat = catMap.get(t.categoryId);
       return {
         Date: t.date,
@@ -53,15 +42,15 @@ function enrichedTransactionRows(
         Weekday: weekdayName(t.date),
         IsWeekend: isWeekend(t.date),
         CategoryId: t.categoryId,
-        Category: sanitizeCsvCell(cat?.name || "Uncategorized"),
-        Merchant: sanitizeCsvCell(t.merchant || ""),
-        PaymentMethod: t.paymentMethod || "",
+        Category: sanitizeCsvCell(cat?.name || 'Uncategorized'),
+        Merchant: sanitizeCsvCell(t.merchant || ''),
+        PaymentMethod: t.paymentMethod || '',
         Amount: t.amount,
         Type: t.type,
         RunningBalance: Math.round(running * 100) / 100,
         IsRecurring: Boolean(t.recurringId),
-        Notes: sanitizeCsvCell(t.note || ""),
-        Tags: sanitizeCsvCell((t.tags || []).join("|")),
+        Notes: sanitizeCsvCell(t.note || ''),
+        Tags: sanitizeCsvCell((t.tags || []).join('|')),
       };
     });
 }
@@ -90,19 +79,12 @@ export async function exportCategoriesCSV(): Promise<string> {
  *  budget-vs-actual report without needing measures computed in DAX. */
 export async function exportMonthlySummaryCSV(): Promise<string> {
   const { transactions, categories } = await loadAll();
-  const months = Array.from(
-    new Set(transactions.map((t) => monthKey(t.date))),
-  ).sort();
+  const months = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort();
   const rows: Record<string, string | number | null>[] = [];
   for (const m of months) {
     for (const c of categories) {
       const actual = transactions
-        .filter(
-          (t) =>
-            t.type === "expense" &&
-            t.categoryId === c.id &&
-            monthKey(t.date) === m,
-        )
+        .filter((t) => t.type === 'expense' && t.categoryId === c.id && monthKey(t.date) === m)
         .reduce((s, t) => s + t.amount, 0);
       if (actual === 0 && c.budget === 0) continue;
       rows.push({
@@ -112,8 +94,7 @@ export async function exportMonthlySummaryCSV(): Promise<string> {
         Budget: c.budget,
         Actual: Math.round(actual * 100) / 100,
         Variance: Math.round((c.budget - actual) * 100) / 100,
-        PctOfBudget:
-          c.budget > 0 ? Math.round((actual / c.budget) * 1000) / 10 : null,
+        PctOfBudget: c.budget > 0 ? Math.round((actual / c.budget) * 1000) / 10 : null,
       });
     }
   }
@@ -126,80 +107,51 @@ export async function exportMonthlySummaryCSV(): Promise<string> {
 export async function exportMLDatasetJSON(): Promise<string> {
   const { transactions, categories, recurring, settings } = await loadAll();
   const s = settings[0];
-  const months = Array.from(
-    new Set(transactions.map((t) => monthKey(t.date))),
-  ).sort();
+  const months = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort();
   const monthlySummary = months.flatMap((m) =>
     categories.map((c) => {
       const actual = transactions
-        .filter(
-          (t) =>
-            t.type === "expense" &&
-            t.categoryId === c.id &&
-            monthKey(t.date) === m,
-        )
+        .filter((t) => t.type === 'expense' && t.categoryId === c.id && monthKey(t.date) === m)
         .reduce((s2, t) => s2 + t.amount, 0);
       return {
-        month: m,
-        categoryId: c.id,
-        categoryName: c.name,
-        budget: c.budget,
-        actual: Math.round(actual * 100) / 100,
+        month: m, categoryId: c.id, categoryName: c.name,
+        budget: c.budget, actual: Math.round(actual * 100) / 100,
         variance: Math.round((c.budget - actual) * 100) / 100,
       };
-    }),
+    })
   );
-  return JSON.stringify(
-    {
-      schemaVersion: SCHEMA_VERSION,
-      exportedAt: new Date().toISOString(),
-      currency: s?.currency || "₹",
-      transactions: enrichedTransactionRows(transactions, categories),
-      categories,
-      recurring,
-      monthlySummary,
-    },
-    null,
-    2,
-  );
+  return JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    currency: s?.currency || '₹',
+    transactions: enrichedTransactionRows(transactions, categories),
+    categories,
+    recurring,
+    monthlySummary,
+  }, null, 2);
 }
 
 export async function exportFullBackup(): Promise<string> {
   const { categories, transactions, recurring, settings } = await loadAll();
-  return JSON.stringify(
-    {
-      schemaVersion: SCHEMA_VERSION,
-      categories,
-      transactions,
-      recurring,
-      settings,
-      exportedAt: new Date().toISOString(),
-    },
-    null,
-    2,
-  );
+  return JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
+    categories, transactions, recurring, settings,
+    exportedAt: new Date().toISOString(),
+  }, null, 2);
 }
 
 export async function importFullBackup(json: string) {
   const data = JSON.parse(json);
-  if (
-    !data ||
-    typeof data !== "object" ||
-    !Array.isArray(data.categories) ||
-    !Array.isArray(data.transactions)
-  ) {
-    throw new Error("Invalid backup file");
+  if (!data || typeof data !== 'object' || !Array.isArray(data.categories) || !Array.isArray(data.transactions)) {
+    throw new Error('Invalid backup file');
   }
 
   // A backup written by a newer app version might use a data shape this
   // version doesn't understand yet — refuse rather than silently importing
   // something that could half-apply and leave the DB in a weird state.
-  if (
-    typeof data.schemaVersion === "number" &&
-    data.schemaVersion > SCHEMA_VERSION
-  ) {
+  if (typeof data.schemaVersion === 'number' && data.schemaVersion > SCHEMA_VERSION) {
     throw new Error(
-      "This backup was created with a newer version of Money Mate. Please update the app before restoring it.",
+      'This backup was created with a newer version of Money Mate. Please update the app before restoring it.',
     );
   }
 
@@ -211,37 +163,66 @@ export async function importFullBackup(json: string) {
     data.transactions.length > MAX_RECORDS ||
     (Array.isArray(data.recurring) && data.recurring.length > MAX_RECORDS)
   ) {
-    throw new Error("Backup file is too large to import.");
+    throw new Error('Backup file is too large to import.');
   }
 
   const categories = sanitizeCategories(data.categories);
   const transactions = sanitizeTransactions(data.transactions);
-  const recurring = sanitizeRecurring(
-    Array.isArray(data.recurring) ? data.recurring : [],
-  );
+  const recurringRaw: unknown[] = Array.isArray(data.recurring) ? data.recurring : [];
+  const recurring = sanitizeRecurring(recurringRaw);
 
-  await db.transaction(
-    "rw",
-    db.categories,
-    db.transactions,
-    db.recurring,
-    db.settings,
-    async () => {
-      await db.categories.clear();
-      await db.transactions.clear();
-      await db.recurring.clear();
-      await db.settings.clear();
-      if (categories.length)
-        await db.categories.bulkAdd(stripIds<Category>(categories));
-      if (transactions.length)
-        await db.transactions.bulkAdd(stripIds<Transaction>(transactions));
-      if (recurring.length)
-        await db.recurring.bulkAdd(stripIds<Recurring>(recurring));
-      if (Array.isArray(data.settings) && data.settings.length) {
-        await db.settings.bulkAdd(sanitizeSettings(data.settings));
-      }
-    },
-  );
+  // IndexedDB's auto-increment key generator is NOT reset by clear() — that's
+  // spec behavior, not a bug in this app, but it means a device that's been
+  // used for a while (ids already advanced past 1) will assign categories
+  // and recurring items brand-new ids on import that do NOT match the old
+  // ids recorded in the backup file. Without an explicit remap here, every
+  // transaction's categoryId/recurringId would silently point at the wrong
+  // row (or nothing at all) the moment a restore happens on anything but a
+  // just-installed app — this was previously flagged from test output but
+  // never actually fixed; the extractId + remap below closes it for real.
+  const extractId = (entry: unknown): number | undefined =>
+    entry && typeof entry === 'object' && typeof (entry as Record<string, unknown>).id === 'number'
+      ? (entry as Record<string, unknown>).id as number
+      : undefined;
+  const oldCategoryIds = (data.categories as unknown[]).map(extractId);
+  const oldRecurringIds = recurringRaw.map(extractId);
+
+  await db.transaction('rw', db.categories, db.transactions, db.recurring, db.settings, async () => {
+    await db.categories.clear();
+    await db.transactions.clear();
+    await db.recurring.clear();
+    await db.settings.clear();
+
+    const categoryIdMap = new Map<number, number>();
+    if (categories.length) {
+      const newIds = await db.categories.bulkAdd(stripIds<Category>(categories), { allKeys: true });
+      newIds.forEach((newId, i) => {
+        const oldId = oldCategoryIds[i];
+        if (typeof oldId === 'number') categoryIdMap.set(oldId, newId);
+      });
+    }
+
+    const recurringIdMap = new Map<number, number>();
+    if (recurring.length) {
+      const newIds = await db.recurring.bulkAdd(stripIds<Recurring>(recurring), { allKeys: true });
+      newIds.forEach((newId, i) => {
+        const oldId = oldRecurringIds[i];
+        if (typeof oldId === 'number') recurringIdMap.set(oldId, newId);
+      });
+    }
+
+    if (transactions.length) {
+      const remapped = transactions.map((t) => ({
+        ...t,
+        categoryId: categoryIdMap.get(t.categoryId) ?? t.categoryId,
+        recurringId: t.recurringId !== undefined ? recurringIdMap.get(t.recurringId) : undefined,
+      }));
+      await db.transactions.bulkAdd(stripIds<Transaction>(remapped));
+    }
+    if (Array.isArray(data.settings) && data.settings.length) {
+      await db.settings.bulkAdd(sanitizeSettings(data.settings));
+    }
+  });
 }
 
 // --- Import validation -----------------------------------------------------
@@ -257,55 +238,44 @@ export async function importFullBackup(json: string) {
 //  - `frequency` is constrained to the four values the UI can ever produce —
 //    an unrecognized one would otherwise hang the app forever the next time
 //    recurring transactions are processed (see advanceDate in db.ts).
-// Records are sanitized in place (never dropped/reordered) so the position-
-// based id remapping in stripIds()/bulkAdd() stays aligned: categories keep
-// their relative order so a transaction's categoryId still points at the
-// right row after both tables are re-inserted with fresh auto-increment ids.
+// Old category/recurring ids referenced by transactions are explicitly
+// remapped onto the freshly-assigned ids in importFullBackup() above, rather
+// than assumed to line up positionally — see the comment there.
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "yearly"] as const;
+const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'] as const;
 const MAX_TEXT_LEN = 200;
 const MAX_ICON_LEN = 8; // generous enough for multi-codepoint emoji (ZWJ sequences, skin tones)
-const FALLBACK_COLOR = "#6FC98A";
+const FALLBACK_COLOR = '#6FC98A';
 
 function asText(v: unknown, max = MAX_TEXT_LEN): string {
-  return typeof v === "string" ? v.slice(0, max) : "";
+  return typeof v === 'string' ? v.slice(0, max) : '';
 }
 function asOptionalText(v: unknown, max = MAX_TEXT_LEN): string | undefined {
   const t = asText(v, max).trim();
   return t || undefined;
 }
 function asFiniteNumber(v: unknown, fallback: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 function asDate(v: unknown, fallback: string): string {
-  if (
-    typeof v === "string" &&
-    DATE_RE.test(v) &&
-    !Number.isNaN(new Date(v + "T00:00:00").getTime())
-  ) {
+  if (typeof v === 'string' && DATE_RE.test(v) && !Number.isNaN(new Date(v + 'T00:00:00').getTime())) {
     return v;
   }
   return fallback;
 }
-function asTxType(v: unknown): "income" | "expense" {
-  return v === "income" ? "income" : "expense";
+function asTxType(v: unknown): 'income' | 'expense' {
+  return v === 'income' ? 'income' : 'expense';
 }
 
 function sanitizeCategories(raw: unknown[]): Category[] {
   return raw.map((entry) => {
-    const c = (entry && typeof entry === "object" ? entry : {}) as Record<
-      string,
-      unknown
-    >;
+    const c = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
     return {
-      name: asText(c.name, 60).trim() || "Uncategorized",
-      icon: asText(c.icon, MAX_ICON_LEN) || "＊",
-      color:
-        typeof c.color === "string" && HEX_COLOR_RE.test(c.color)
-          ? c.color
-          : FALLBACK_COLOR,
+      name: asText(c.name, 60).trim() || 'Uncategorized',
+      icon: asText(c.icon, MAX_ICON_LEN) || '＊',
+      color: typeof c.color === 'string' && HEX_COLOR_RE.test(c.color) ? c.color : FALLBACK_COLOR,
       budget: Math.max(0, asFiniteNumber(c.budget, 0)),
       archived: c.archived === true,
       type: asTxType(c.type),
@@ -316,15 +286,9 @@ function sanitizeCategories(raw: unknown[]): Category[] {
 function sanitizeTransactions(raw: unknown[]): Transaction[] {
   const today = new Date().toISOString().slice(0, 10);
   return raw.map((entry) => {
-    const t = (entry && typeof entry === "object" ? entry : {}) as Record<
-      string,
-      unknown
-    >;
+    const t = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
     const tags = Array.isArray(t.tags)
-      ? t.tags
-          .filter((x): x is string => typeof x === "string")
-          .slice(0, 20)
-          .map((x) => asText(x, 40))
+      ? t.tags.filter((x): x is string => typeof x === 'string').slice(0, 20).map((x) => asText(x, 40))
       : undefined;
     return {
       type: asTxType(t.type),
@@ -335,10 +299,7 @@ function sanitizeTransactions(raw: unknown[]): Transaction[] {
       note: asOptionalText(t.note),
       paymentMethod: asOptionalText(t.paymentMethod, 40),
       tags,
-      recurringId:
-        typeof t.recurringId === "number" && Number.isFinite(t.recurringId)
-          ? t.recurringId
-          : undefined,
+      recurringId: typeof t.recurringId === 'number' && Number.isFinite(t.recurringId) ? t.recurringId : undefined,
       createdAt: asFiniteNumber(t.createdAt, Date.now()),
     };
   });
@@ -347,17 +308,12 @@ function sanitizeTransactions(raw: unknown[]): Transaction[] {
 function sanitizeRecurring(raw: unknown[]): Recurring[] {
   const today = new Date().toISOString().slice(0, 10);
   return raw.map((entry) => {
-    const r = (entry && typeof entry === "object" ? entry : {}) as Record<
-      string,
-      unknown
-    >;
-    const frequency = VALID_FREQUENCIES.includes(
-      r.frequency as (typeof VALID_FREQUENCIES)[number],
-    )
+    const r = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+    const frequency = VALID_FREQUENCIES.includes(r.frequency as (typeof VALID_FREQUENCIES)[number])
       ? (r.frequency as (typeof VALID_FREQUENCIES)[number])
-      : "monthly";
+      : 'monthly';
     return {
-      name: asText(r.name, 60).trim() || "Recurring",
+      name: asText(r.name, 60).trim() || 'Recurring',
       type: asTxType(r.type),
       amount: Math.max(0, asFiniteNumber(r.amount, 0)),
       categoryId: asFiniteNumber(r.categoryId, 0),
@@ -373,17 +329,15 @@ function sanitizeRecurring(raw: unknown[]): Recurring[] {
 
 function sanitizeSettings(raw: unknown[]): Settings[] {
   return raw.slice(0, 1).map((entry) => {
-    const s = (entry && typeof entry === "object" ? entry : {}) as Record<
-      string,
-      unknown
-    >;
+    const s = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
     return {
       onboarded: s.onboarded === true,
-      currency: asText(s.currency, 4) || "₹",
-      theme: s.theme === "light" || s.theme === "system" ? s.theme : "dark",
+      currency: asText(s.currency, 4) || '₹',
+      theme: s.theme === 'light' || s.theme === 'system' ? s.theme : 'dark',
       monthlyIncome: Math.max(0, asFiniteNumber(s.monthlyIncome, 0)),
       incomeSources: asOptionalText(s.incomeSources, 500),
       carryForward: s.carryForward === true,
+      hideWidgetAmounts: s.hideWidgetAmounts === true,
     };
   });
 }
@@ -397,7 +351,7 @@ function stripIds<T extends { id?: number }>(arr: T[]): T[] {
 
 export function downloadFile(name: string, content: string, type: string) {
   const blob = new Blob([content], { type });
-  const a = document.createElement("a");
+  const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
   document.body.appendChild(a);
