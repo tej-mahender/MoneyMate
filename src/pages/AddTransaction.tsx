@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { db, type TxType, computeMonthSummary, getSettings } from "../db/db";
-import { todayISO, monthLabel, monthKey } from "../lib/format";
+import { db, type TxType } from "../db/db";
+import { todayISO } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
-import {
-  isQuickAddContext,
-  closeQuickAdd,
-  pushQuickWidgetSync,
-} from "../lib/quickAdd";
-import { X } from "lucide-react";
 import Dropdown from "../components/Dropdown";
 
 const RECENT_CAT_KEY = "pfos_last_category"; // suffixed per type, e.g. `${RECENT_CAT_KEY}_expense`
@@ -17,10 +11,7 @@ const RECENT_CAT_KEY = "pfos_last_category"; // suffixed per type, e.g. `${RECEN
 export default function AddTransaction() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const quick = isQuickAddContext() || searchParams.get("quick") === "1";
-  const editId = searchParams.get("edit")
-    ? Number(searchParams.get("edit"))
-    : null;
+  const editId = searchParams.get("edit") ? Number(searchParams.get("edit")) : null;
   const editingTx = useLiveQuery(
     () => (editId ? db.transactions.get(editId) : undefined),
     [editId],
@@ -121,24 +112,6 @@ export default function AddTransaction() {
     localStorage.setItem(`${RECENT_CAT_KEY}_${type}`, String(categoryId));
     setSaving(false);
 
-    if (quick) {
-      // No Dashboard is rendered in this popup context, so push a fresh
-      // widget refresh directly using the same totals Dashboard would show.
-      const [summary, settings] = await Promise.all([
-        computeMonthSummary(),
-        getSettings(),
-      ]);
-      pushQuickWidgetSync({
-        spent: summary.spent,
-        budget: summary.budget,
-        remaining: summary.remaining,
-        currency: settings.currency,
-        monthLabel: monthLabel(monthKey(todayISO())),
-      });
-      closeQuickAdd();
-      return;
-    }
-
     showToast(
       `Added ${amount} to ${categories.find((c) => c.id === categoryId)?.name || ""}.`,
     );
@@ -153,30 +126,7 @@ export default function AddTransaction() {
 
   return (
     <>
-      {quick ? (
-        <header
-          className="topbar"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <div className="eyebrow">Quick add</div>
-            <h1 style={{ fontSize: 20 }}>
-              Log a {type === "income" ? "income" : "expense"}
-            </h1>
-          </div>
-          <button
-            className="icon-btn"
-            aria-label="Close"
-            onClick={closeQuickAdd}
-          >
-            <X size={20} />
-          </button>
-        </header>
-      ) : editId ? (
+      {editId ? (
         <header className="topbar">
           <div className="eyebrow">Editing</div>
           <h1>Edit transaction</h1>
@@ -313,7 +263,7 @@ export default function AddTransaction() {
           >
             {saving ? "Saving…" : editId ? "Save changes" : "Save"}
           </button>
-          {!quick && !editId && (
+          {!editId && (
             <button
               className="btn secondary"
               disabled={saving || categories.length === 0}

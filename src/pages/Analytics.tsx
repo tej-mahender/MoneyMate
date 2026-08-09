@@ -34,7 +34,10 @@ import {
   Legend,
   AreaChart,
   Area,
+  type PieLabelRenderProps,
 } from "recharts";
+
+const RADIAN = Math.PI / 180;
 
 type Range = "month" | "3m" | "6m" | "1y" | "all";
 const RANGE_MONTHS: Record<Range, number> = {
@@ -321,7 +324,68 @@ export default function Analytics({ currency }: { currency: string }) {
     };
   }, [rangeExpenses, txs, startMonth, range]);
 
-  const topCategory = pieData[0];
+  // Renders each pie slice's name + amount as a persistent label outside the
+  // chart, connected back to its slice by a leader line colored to match —
+  // the point being nobody should have to hover/tap a slice just to find out
+  // what it is, which barely works on a touch device anyway (no hover state).
+  function renderPieLabel(props: PieLabelRenderProps) {
+    const { cx, cy, midAngle, outerRadius, name, value, percent, fill } = props;
+    // Sub-1% slivers get crowded and unreadable if labeled individually —
+    // their color is still visible in the ring itself.
+    if (!percent || percent < 0.01) return null;
+    const numCx = Number(cx);
+    const numCy = Number(cy);
+    const numOuterRadius = Number(outerRadius);
+    const sin = Math.sin(-RADIAN * Number(midAngle));
+    const cos = Math.cos(-RADIAN * Number(midAngle));
+    const sx = numCx + (numOuterRadius + 6) * cos;
+    const sy = numCy + (numOuterRadius + 6) * sin;
+    const mx = numCx + (numOuterRadius + 20) * cos;
+    const my = numCy + (numOuterRadius + 20) * sin;
+    const rightSide = cos >= 0;
+    const ex = mx + (rightSide ? 1 : -1) * 12;
+    const ey = my;
+    const textAnchor = rightSide ? "start" : "end";
+    // Cards on this app's mobile-width layout have far less horizontal room
+    // than a desktop chart does — an untruncated long category name (e.g.
+    // "Repay Credit Card") could run the label off the edge of the card.
+    // The full name is always still available from the Tooltip on tap.
+    const label =
+      String(name).length > 15 ? `${String(name).slice(0, 14)}…` : name;
+
+    return (
+      <g key={name}>
+        <path
+          d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`}
+          stroke={fill}
+          strokeWidth={1.5}
+          fill="none"
+        />
+        <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+        <text
+          x={ex + (rightSide ? 7 : -7)}
+          y={ey - 6}
+          textAnchor={textAnchor}
+          fontFamily="var(--sans)"
+          fontSize={11.5}
+          fontWeight={600}
+          fill="var(--ink)"
+        >
+          {label}
+        </text>
+        <text
+          x={ex + (rightSide ? 7 : -7)}
+          y={ey + 8}
+          textAnchor={textAnchor}
+          fontFamily="var(--mono)"
+          fontSize={10}
+          fill="var(--ink-faint)"
+        >
+          {fmtMoney(Number(value), currency)}
+        </text>
+      </g>
+    );
+  }
 
   return (
     <>
@@ -418,41 +482,38 @@ export default function Analytics({ currency }: { currency: string }) {
             </div>
           ) : (
             <>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={2}
-                  >
-                    {pieData.map((entry, i) => (
-                      <Cell
-                        key={i}
-                        fill={entry.color}
-                        stroke="var(--void-elev)"
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v) => fmtMoney(Number(v), currency)}
-                    contentStyle={tooltipStyle}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div
-                className="muted"
-                style={{ textAlign: "center", marginTop: -8 }}
-              >
-                Top: <b style={{ color: "var(--ink)" }}>{topCategory?.name}</b>{" "}
-                at{" "}
-                {insights.totalSpent > 0
-                  ? ((topCategory.value / insights.totalSpent) * 100).toFixed(0)
-                  : 0}
-                % of spend
+              <div className="pie-chart-wrap">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={0}
+                      outerRadius={62}
+                      startAngle={90}
+                      endAngle={-270}
+                      label={renderPieLabel}
+                      labelLine={false}
+                      isAnimationActive={false}
+                    >
+                      {pieData.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={entry.color}
+                          stroke="var(--void-elev)"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(v) => fmtMoney(Number(v), currency)}
+                      contentStyle={tooltipStyle}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </>
           )}

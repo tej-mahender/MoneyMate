@@ -1,5 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
+import {
+  HashRouter,
+  Routes,
+  Route,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   getSettings,
@@ -7,7 +13,7 @@ import {
   type Settings as SettingsType,
 } from "./db/db";
 import { todayISO } from "./lib/format";
-import { isQuickAddContext } from "./lib/quickAdd";
+import { consumePendingWidgetRoute } from "./lib/widgetBridge";
 import Dashboard from "./pages/Dashboard";
 import BottomNav from "./components/BottomNav";
 import Toast from "./components/Toast";
@@ -46,6 +52,20 @@ function AnimatedRoutes({
   onSettingsChange: (s: SettingsType) => void;
 }) {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // If the app was just launched from the widget's "+" button, jump
+  // straight to the add-transaction screen instead of the dashboard. Runs
+  // once on mount — consumePendingWidgetRoute() clears the native-side
+  // value as it reads it, so this can't re-fire on a later remount.
+  useEffect(() => {
+    (async () => {
+      const route = await consumePendingWidgetRoute();
+      if (route) navigate(route, { replace: true });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -66,6 +86,7 @@ function AnimatedRoutes({
                   <Dashboard
                     currency={settings.currency}
                     monthlyIncome={settings.monthlyIncome}
+                    hideWidgetAmounts={settings.hideWidgetAmounts}
                   />
                 }
               />
@@ -144,13 +165,11 @@ export default function App() {
     );
   }
 
-  const quickMode =
-    isQuickAddContext() || window.location.hash.includes("quick=1");
   return (
     <HashRouter>
-      <div className={"app-shell" + (quickMode ? " compact" : "")}>
+      <div className="app-shell">
         <AnimatedRoutes settings={settings} onSettingsChange={setSettings} />
-        {!quickMode && <BottomNav />}
+        <BottomNav />
         <Toast />
       </div>
     </HashRouter>
