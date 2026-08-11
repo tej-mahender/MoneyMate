@@ -893,9 +893,9 @@ textarea:focus {
   max-width: 480px;
   margin: 0 auto;
   width: calc(100% - 32px);
-  background: var(--surface-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  /* Opaque by design (not glass) — solid so content scrolling underneath
+     never bleeds through or affects legibility of the nav icons. */
+  background: var(--void-elev);
   border: 1px solid var(--surface-border-strong);
   border-radius: 24px;
   display: flex;
