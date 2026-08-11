@@ -1,4 +1,15 @@
-import { registerPlugin, Capacitor } from '@capacitor/core';
+import { registerPlugin, Capacitor } from "@capacitor/core";
+
+/** One row in the large widget's mini category breakdown. Kept intentionally
+ *  small (name/icon/color + two numbers) since it's serialized to a JSON
+ *  string on the native side and rendered into a fixed number of rows. */
+export interface WidgetCategorySnapshot {
+  name: string;
+  icon: string;
+  color: string;
+  spent: number;
+  budget: number;
+}
 
 export interface WidgetSnapshot {
   spent: number;
@@ -9,6 +20,10 @@ export interface WidgetSnapshot {
   /** Mirrors Settings.hideWidgetAmounts — the native widget masks its text
    *  when this is true rather than deciding privacy on its own. */
   hideAmounts: boolean;
+  /** Top categories by spend this month, for the larger 4x2 widget variant.
+   *  Optional — the small widget ignores it entirely. Cap at ~4 before
+   *  passing in; the native side also caps defensively. */
+  categories?: WidgetCategorySnapshot[];
 }
 
 interface WidgetBridgePlugin {
@@ -19,7 +34,7 @@ interface WidgetBridgePlugin {
   getPendingRoute(): Promise<{ route: string | null }>;
 }
 
-const WidgetBridge = registerPlugin<WidgetBridgePlugin>('WidgetBridge');
+const WidgetBridge = registerPlugin<WidgetBridgePlugin>("WidgetBridge");
 
 /**
  * Pushes the current month's totals to the native home-screen widget.
@@ -32,7 +47,7 @@ export async function syncWidget(snapshot: WidgetSnapshot): Promise<void> {
     await WidgetBridge.updateWidget(snapshot);
   } catch (err) {
     // Widget sync is best-effort — never let it break the dashboard.
-    console.warn('Widget sync failed', err);
+    console.warn("Widget sync failed", err);
   }
 }
 
@@ -49,7 +64,7 @@ export async function consumePendingWidgetRoute(): Promise<string | null> {
     const { route } = await WidgetBridge.getPendingRoute();
     return route || null;
   } catch (err) {
-    console.warn('Reading pending widget route failed', err);
+    console.warn("Reading pending widget route failed", err);
     return null;
   }
 }

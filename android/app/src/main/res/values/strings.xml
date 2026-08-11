@@ -5,4 +5,5 @@
     <string name="package_name">com.pfos.app</string>
     <string name="custom_url_scheme">com.pfos.app</string>
     <string name="widget_description">Glanceable monthly balance — spent, budget, and what\'s left, right from your home screen.</string>
+    <string name="widget_description_large">Monthly balance plus your top spending categories — a bigger glanceable view for your home screen.</string>
 </resources>

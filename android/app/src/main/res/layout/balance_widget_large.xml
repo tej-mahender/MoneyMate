@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="This month"
+            android:textColor="#F0B94D"
+            android:textSize="11sp"
+            android:letterSpacing="0.08"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/widget_add_button"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#02291D"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:background="@drawable/widget_add_button_background" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_amount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="—"
+        android:textColor="#F4F1EA"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_sub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text=""
+        android:textColor="#A3A1B5"
+        android:textSize="12sp" />
+
+    <ProgressBar
+        android:id="@+id/widget_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginTop="10dp"
+        android:max="100"
+        android:progress="0" />
+
+    <!-- Mini category breakdown: up to 4 fixed rows, hidden individually when
+         there's no data for that slot. See BalanceWidgetLargeProvider. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/widget_cat_row_1"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView android:id="@+id/widget_cat_icon_1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
+            <TextView android:id="@+id/widget_cat_name_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_cat_row_2"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView android:id="@+id/widget_cat_icon_2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
+            <TextView android:id="@+id/widget_cat_name_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_cat_row_3"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView android:id="@+id/widget_cat_icon_3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
+            <TextView android:id="@+id/widget_cat_name_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_cat_row_4"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView android:id="@+id/widget_cat_icon_4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
+            <TextView android:id="@+id/widget_cat_name_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
