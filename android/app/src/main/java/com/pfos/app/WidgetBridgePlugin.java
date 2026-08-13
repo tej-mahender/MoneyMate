@@ -15,17 +15,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Bridges the web app's dashboard totals into a native SharedPreferences file
- * so the home-screen widget (BalanceWidgetProvider) can render without ever
- * opening the app or touching the WebView's IndexedDB. Call
- * WidgetBridge.updateWidget(...) from the dashboard whenever totals change;
- * everything here stays on-device.
+ * Bridges the web app's dashboard totals into a native SharedPreferences file so the
+ * home-screen widget (BalanceWidgetProvider) can render without ever opening the app
+ * or touching the WebView's IndexedDB. Call WidgetBridge.updateWidget(...) from the
+ * dashboard whenever totals change; everything here stays on-device.
  *
- * Also carries the widget's "+" button back to the web app: MainActivity
- * stashes a pending route into the same prefs file when launched from it, and
- * getPendingRoute() lets the web layer pick that up on boot. This avoids a
- * second WebView/JS-interface entirely — the "+" button just deep-links into
- * the app's own normal /add screen.
+ * Also carries the widget's "+" button back to the web app: MainActivity stashes a
+ * pending route into the same prefs file when launched from it, and getPendingRoute()
+ * lets the web layer pick that up on boot. This avoids a second WebView/JS-interface
+ * entirely — the "+" button just deep-links into the app's own normal /add screen.
  */
 @CapacitorPlugin(name = "WidgetBridge")
 public class WidgetBridgePlugin extends Plugin {
@@ -68,12 +66,10 @@ public class WidgetBridgePlugin extends Plugin {
         call.resolve(ret);
     }
 
-    /**
-     * Turns the JS array of {name, icon, color, spent, budget} into a plain
-     * JSON string for SharedPreferences (which has no native array type),
-     * capped defensively at 4 entries — matches the large widget's fixed 4-row
-     * layout regardless of what the web side sends.
-     */
+    /** Turns the JS array of {name, icon, color, spent, budget} into a plain
+     *  JSON string for SharedPreferences (which has no native array type),
+     *  capped defensively at 4 entries — matches the large widget's fixed
+     *  4-row layout regardless of what the web side sends. */
     private String serializeCategories(JSArray categories) {
         JSONArray out = new JSONArray();
         if (categories != null) {
@@ -84,7 +80,7 @@ public class WidgetBridgePlugin extends Plugin {
                     JSONObject row = new JSONObject();
                     row.put("name", src.optString("name", ""));
                     row.put("icon", src.optString("icon", ""));
-                    row.put("color", src.optString("color", "#F0B94D"));
+                    row.put("color", src.optString("color", "#56F29A"));
                     row.put("spent", src.optDouble("spent", 0));
                     row.put("budget", src.optDouble("budget", 0));
                     out.put(row);

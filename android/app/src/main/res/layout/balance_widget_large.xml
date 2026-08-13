@@ -19,7 +19,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="This month"
-            android:textColor="#F0B94D"
+            android:textColor="#56F29A"
             android:textSize="11sp"
             android:letterSpacing="0.08"
             android:fontFamily="monospace" />
@@ -43,7 +43,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text="—"
-        android:textColor="#F4F1EA"
+        android:textColor="#F2F7F5"
         android:textSize="22sp"
         android:textStyle="bold" />
 
@@ -53,7 +53,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:text=""
-        android:textColor="#A3A1B5"
+        android:textColor="#9FB3AE"
         android:textSize="12sp" />
 
     <ProgressBar
@@ -63,7 +63,8 @@
         android:layout_height="6dp"
         android:layout_marginTop="10dp"
         android:max="100"
-        android:progress="0" />
+        android:progress="0"
+        android:progressDrawable="@drawable/widget_progress_bar" />
 
     <!-- Mini category breakdown: up to 4 fixed rows, hidden individually when
          there's no data for that slot. See BalanceWidgetLargeProvider. -->
@@ -82,8 +83,8 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
             <TextView android:id="@+id/widget_cat_icon_1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
-            <TextView android:id="@+id/widget_cat_name_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_cat_amount_1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_cat_name_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D6E3DF" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#56F29A" android:textSize="12sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -94,8 +95,8 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
             <TextView android:id="@+id/widget_cat_icon_2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
-            <TextView android:id="@+id/widget_cat_name_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_cat_amount_2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_cat_name_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D6E3DF" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#56F29A" android:textSize="12sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -106,8 +107,8 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
             <TextView android:id="@+id/widget_cat_icon_3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
-            <TextView android:id="@+id/widget_cat_name_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_cat_amount_3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_cat_name_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D6E3DF" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#56F29A" android:textSize="12sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -118,8 +119,8 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
             <TextView android:id="@+id/widget_cat_icon_4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginEnd="6dp" />
-            <TextView android:id="@+id/widget_cat_name_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D8D6E5" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
-            <TextView android:id="@+id/widget_cat_amount_4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#F0B94D" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:id="@+id/widget_cat_name_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#D6E3DF" android:textSize="12sp" android:singleLine="true" android:ellipsize="end" />
+            <TextView android:id="@+id/widget_cat_amount_4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#56F29A" android:textSize="12sp" android:textStyle="bold" />
         </LinearLayout>
 
     </LinearLayout>

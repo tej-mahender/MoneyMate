@@ -33,32 +33,34 @@ export default function BottomNav() {
         <Plus size={26} strokeWidth={2.5} />
       </motion.button>
 
-      <nav className="bottom-nav">
-        {tabs.map((t, i) => {
-          const isActive = i === activeIndex;
-          const { Icon } = t;
-          return (
-            <NavLink
-              key={t.to}
-              to={t.to}
-              end={t.end}
-              className={"nav-item" + (isActive ? " active" : "")}
-            >
-              {isActive && (
-                <motion.div
-                  className="nav-pill"
-                  layoutId="nav-pill"
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                />
-              )}
-              <span className="nav-icon">
-                <Icon size={19} strokeWidth={isActive ? 2.4 : 2} />
-              </span>
-              {/* <span style={{ position: 'relative', zIndex: 1 }}>{t.label}</span> */}
-            </NavLink>
-          );
-        })}
-      </nav>
+      <div className="bottom-nav-wrap">
+        <nav className="bottom-nav">
+          {tabs.map((t, i) => {
+            const isActive = i === activeIndex;
+            const { Icon } = t;
+            return (
+              <NavLink
+                key={t.to}
+                to={t.to}
+                end={t.end}
+                className={"nav-item" + (isActive ? " active" : "")}
+              >
+                {isActive && (
+                  <motion.div
+                    className="nav-pill"
+                    layoutId="nav-pill"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <span className="nav-icon">
+                  <Icon size={19} strokeWidth={isActive ? 2.4 : 2} />
+                </span>
+                {/* <span style={{ position: 'relative', zIndex: 1 }}>{t.label}</span> */}
+              </NavLink>
+            );
+          })}
+        </nav>
+      </div>
     </>
   );
 }

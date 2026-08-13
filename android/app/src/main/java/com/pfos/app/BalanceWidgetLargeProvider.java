@@ -22,9 +22,9 @@ import org.json.JSONObject;
  * breakdown instead of only the month total.
  *
  * Deliberately NOT built with a RemoteViewsService/collection widget: the
- * breakdown is capped at 4 rows by WidgetBridgePlugin before it's even stored,
- * so a fixed-row layout with visibility toggling is simpler and avoids a second
- * native factory/service for no real benefit at this size.
+ * breakdown is capped at 4 rows by WidgetBridgePlugin before it's even
+ * stored, so a fixed-row layout with visibility toggling is simpler and
+ * avoids a second native factory/service for no real benefit at this size.
  */
 public class BalanceWidgetLargeProvider extends AppWidgetProvider {
 
@@ -46,10 +46,8 @@ public class BalanceWidgetLargeProvider extends AppWidgetProvider {
         pushUpdate(context, appWidgetManager, appWidgetIds);
     }
 
-    /**
-     * Called both by Android's normal widget update cycle and directly by
-     * WidgetBridgePlugin right after the web app writes fresh totals.
-     */
+    /** Called both by Android's normal widget update cycle and directly by
+     *  WidgetBridgePlugin right after the web app writes fresh totals. */
     public static void pushUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         SharedPreferences prefs = context.getSharedPreferences(WidgetBridgePlugin.PREFS_NAME, Context.MODE_PRIVATE);
         String currency = prefs.getString("currency", "₹");
@@ -93,8 +91,8 @@ public class BalanceWidgetLargeProvider extends AppWidgetProvider {
             Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
             if (launchIntent != null) {
                 PendingIntent pending = PendingIntent.getActivity(
-                        context, 2, launchIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                    context, 2, launchIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                 );
                 views.setOnClickPendingIntent(R.id.widget_root, pending);
             }
@@ -106,8 +104,8 @@ public class BalanceWidgetLargeProvider extends AppWidgetProvider {
                 // Distinct request codes across BOTH providers (0/1 used by the small
                 // widget) so FLAG_UPDATE_CURRENT never collides across widget sizes.
                 PendingIntent addPending = PendingIntent.getActivity(
-                        context, 3, addIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                    context, 3, addIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                 );
                 views.setOnClickPendingIntent(R.id.widget_add_button, addPending);
             }
@@ -137,9 +135,9 @@ public class BalanceWidgetLargeProvider extends AppWidgetProvider {
                 double catSpent = cat.optDouble("spent", 0);
                 int color;
                 try {
-                    color = Color.parseColor(cat.optString("color", "#F0B94D"));
+                    color = Color.parseColor(cat.optString("color", "#56F29A"));
                 } catch (IllegalArgumentException badColor) {
-                    color = Color.parseColor("#F0B94D");
+                    color = Color.parseColor("#56F29A");
                 }
 
                 views.setViewVisibility(ROW_IDS[i], View.VISIBLE);
