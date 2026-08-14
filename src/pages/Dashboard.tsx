@@ -74,10 +74,11 @@ export default function Dashboard({
 
   const catMap = new Map(allCats.map((c) => [c.id, c]));
 
-  const budgetPct =
-    totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
-  const ringState = budgetPct < 75 ? "good" : budgetPct < 100 ? "warn" : "over";
-  const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
+ const budgetPctRaw = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+ const budgetPct = Math.min(budgetPctRaw, 100);
+ const ringState =
+   budgetPctRaw < 75 ? "good" : budgetPctRaw < 100 ? "warn" : "over";
+ const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
 
   // Per-category spend this month, for the large widget's mini breakdown.
   // Sorted by spend (not budget) so the rows show "what's actually eating
@@ -162,7 +163,7 @@ export default function Dashboard({
             <Ring pct={budgetPct} color={ringState} />
             <div className="ring-figs">
               <div className="big" style={{ color: ringColor }}>
-                {budgetPct.toFixed(0)}%
+                {budgetPctRaw.toFixed(0)}%
               </div>
               <div className="lbl">
                 of {fmtMoney(totalBudget, currency)} budget used

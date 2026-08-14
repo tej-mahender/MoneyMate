@@ -339,7 +339,7 @@ button:focus:not(:focus-visible) {
 }
 
 .bar-fill.warn {
-  background: linear-gradient(90deg, var(--warn), var(--gold));
+  background: linear-gradient(90deg, var(--gold), var(--warn));
 }
 
 .bar-fill.over {
