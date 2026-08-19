@@ -15,6 +15,27 @@ export function todayISO(): string {
   return toLocalDateStr(new Date());
 }
 
+/** Style for a bracket/category's colored icon badge (the small rounded
+ *  square around its emoji, e.g. Overview's bracket rows, Dashboard/History
+ *  category rows, Settings' bracket list…). Centralized because the same
+ *  three properties were being hand-duplicated at every call site with a
+ *  fixed, barely-visible 15% background tint (hex alpha "26") and a flat
+ *  neutral border shared by every badge regardless of its own color — the
+ *  net effect was that Expenditure/Savings/Investments/Income all read as
+ *  the same dull dark box, since the emoji glyph itself doesn't take the
+ *  CSS `color` (emoji are fixed-color glyphs, not currentColor icons) and
+ *  the only other visible cue was that faint tint. A stronger background
+ *  tint plus a border actually colored to match makes each one legible as
+ *  its own color at a glance instead of all reading as the same grey chip. */
+export function iconBadgeStyle(color: string | undefined): {
+  background: string;
+  color: string;
+  borderColor: string;
+} {
+  const c = color || "#888888";
+  return { background: `${c}40`, color: c, borderColor: `${c}80` };
+}
+
 export function monthKey(iso: string): string {
   return iso.slice(0, 7);
 }

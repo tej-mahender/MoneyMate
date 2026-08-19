@@ -1,8 +1,16 @@
 import Papa from 'papaparse';
-import { db, type Category, type Transaction, type Recurring, type Settings } from '../db/db';
+import { db, type Category, type Bracket, type BracketKind, type Transaction, type Recurring, type Settings } from '../db/db';
 import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from './format';
 
-export const SCHEMA_VERSION = 3;
+// v5: Category.flow ('spend' | 'allocation' | 'income') was replaced by
+// Category.bracketId, referencing a new Bracket table — see db.ts. A
+// category now belongs to a bracket (Expenditure/Savings/Investments/
+// Income, or a custom one) and inherits that bracket's kind, rather than
+// carrying a flat flag itself. Older backups (schemaVersion <= 4, with no
+// `brackets` array at all) are still readable: importFullBackup()
+// synthesizes the 4 default brackets and infers each category's bracket
+// from its old flow/type/name on the way in.
+export const SCHEMA_VERSION = 5;
 
 /** Prevents CSV formula injection: a cell starting with =, +, -, or @ gets
  *  interpreted as a formula by Excel/Sheets when the file is opened. Prefixing
@@ -13,13 +21,14 @@ function sanitizeCsvCell(v: string): string {
 }
 
 async function loadAll() {
-  const [transactions, categories, recurring, settings] = await Promise.all([
+  const [transactions, categories, brackets, recurring, settings] = await Promise.all([
     db.transactions.toArray(),
     db.categories.toArray(),
+    db.brackets.toArray(),
     db.recurring.toArray(),
     db.settings.toArray(),
   ]);
-  return { transactions, categories, recurring, settings };
+  return { transactions, categories, brackets, recurring, settings };
 }
 
 /** Flat, ML/BI-ready transaction records: one row per transaction with every
@@ -60,25 +69,47 @@ export async function exportTransactionsCSV(): Promise<string> {
   return Papa.unparse(enrichedTransactionRows(transactions, categories));
 }
 
+/** Dimension table for brackets — Expenditure/Savings/Investments/Income or
+ *  any custom ones. Pairs with pfos-categories-*.csv via BracketId. */
+export async function exportBracketsCSV(): Promise<string> {
+  const { brackets } = await loadAll();
+  const rows = brackets.map((b) => ({
+    BracketId: b.id,
+    Name: sanitizeCsvCell(b.name),
+    Kind: b.kind,
+    Icon: b.icon,
+    Color: b.color,
+    Archived: Boolean(b.archived),
+  }));
+  return Papa.unparse(rows);
+}
+
 /** Dimension table — pairs with the transactions fact table in Power BI via CategoryId. */
 export async function exportCategoriesCSV(): Promise<string> {
-  const { categories } = await loadAll();
-  const rows = categories.map((c) => ({
-    CategoryId: c.id,
-    Name: sanitizeCsvCell(c.name),
-    Type: c.type ?? "expense",
-    Icon: c.icon,
-    Color: c.color,
-    MonthlyBudget: c.budget,
-    Archived: Boolean(c.archived),
-  }));
+  const { categories, brackets } = await loadAll();
+  const bracketMap = new Map(brackets.map((b) => [b.id, b]));
+  const rows = categories.map((c) => {
+    const bracket = bracketMap.get(c.bracketId);
+    return {
+      CategoryId: c.id,
+      Name: sanitizeCsvCell(c.name),
+      BracketId: c.bracketId,
+      BracketName: sanitizeCsvCell(bracket?.name ?? ''),
+      BracketKind: bracket?.kind ?? 'spend',
+      Icon: c.icon,
+      Color: c.color,
+      MonthlyBudget: c.budget,
+      Archived: Boolean(c.archived),
+    };
+  });
   return Papa.unparse(rows);
 }
 
 /** Pre-aggregated month x category fact table — the natural grain for a Power BI
  *  budget-vs-actual report without needing measures computed in DAX. */
 export async function exportMonthlySummaryCSV(): Promise<string> {
-  const { transactions, categories } = await loadAll();
+  const { transactions, categories, brackets } = await loadAll();
+  const bracketMap = new Map(brackets.map((b) => [b.id, b]));
   const months = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort();
   const rows: Record<string, string | number | null>[] = [];
   for (const m of months) {
@@ -87,10 +118,14 @@ export async function exportMonthlySummaryCSV(): Promise<string> {
         .filter((t) => t.type === 'expense' && t.categoryId === c.id && monthKey(t.date) === m)
         .reduce((s, t) => s + t.amount, 0);
       if (actual === 0 && c.budget === 0) continue;
+      const bracket = bracketMap.get(c.bracketId);
       rows.push({
         Month: m,
         CategoryId: c.id ?? -1,
         CategoryName: sanitizeCsvCell(c.name),
+        BracketId: c.bracketId,
+        BracketName: sanitizeCsvCell(bracket?.name ?? ''),
+        BracketKind: bracket?.kind ?? 'spend',
         Budget: c.budget,
         Actual: Math.round(actual * 100) / 100,
         Variance: Math.round((c.budget - actual) * 100) / 100,
@@ -101,20 +136,23 @@ export async function exportMonthlySummaryCSV(): Promise<string> {
   return Papa.unparse(rows);
 }
 
-/** A single bundled JSON dataset — transactions (enriched), categories, and the
- *  monthly summary — sized for a Python/pandas ML notebook to load in one shot
- *  (`pd.json_normalize(data['transactions'])`) without juggling three CSV files. */
+/** A single bundled JSON dataset — transactions (enriched), categories, brackets,
+ *  and the monthly summary — sized for a Python/pandas ML notebook to load in one
+ *  shot (`pd.json_normalize(data['transactions'])`) without juggling several files. */
 export async function exportMLDatasetJSON(): Promise<string> {
-  const { transactions, categories, recurring, settings } = await loadAll();
+  const { transactions, categories, brackets, recurring, settings } = await loadAll();
   const s = settings[0];
+  const bracketMap = new Map(brackets.map((b) => [b.id, b]));
   const months = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort();
   const monthlySummary = months.flatMap((m) =>
     categories.map((c) => {
       const actual = transactions
         .filter((t) => t.type === 'expense' && t.categoryId === c.id && monthKey(t.date) === m)
         .reduce((s2, t) => s2 + t.amount, 0);
+      const bracket = bracketMap.get(c.bracketId);
       return {
         month: m, categoryId: c.id, categoryName: c.name,
+        bracketId: c.bracketId, bracketName: bracket?.name, bracketKind: bracket?.kind,
         budget: c.budget, actual: Math.round(actual * 100) / 100,
         variance: Math.round((c.budget - actual) * 100) / 100,
       };
@@ -126,16 +164,17 @@ export async function exportMLDatasetJSON(): Promise<string> {
     currency: s?.currency || '₹',
     transactions: enrichedTransactionRows(transactions, categories),
     categories,
+    brackets,
     recurring,
     monthlySummary,
   }, null, 2);
 }
 
 export async function exportFullBackup(): Promise<string> {
-  const { categories, transactions, recurring, settings } = await loadAll();
+  const { categories, brackets, transactions, recurring, settings } = await loadAll();
   return JSON.stringify({
     schemaVersion: SCHEMA_VERSION,
-    categories, transactions, recurring, settings,
+    brackets, categories, transactions, recurring, settings,
     exportedAt: new Date().toISOString(),
   }, null, 2);
 }
@@ -155,43 +194,82 @@ export async function importFullBackup(json: string) {
     );
   }
 
+  const bracketsRaw: unknown[] = Array.isArray(data.brackets) ? data.brackets : [];
+  const recurringRaw: unknown[] = Array.isArray(data.recurring) ? data.recurring : [];
+
   // Generous sanity cap — not a real-world size any real backup would hit,
   // just a guard against a corrupted/hostile file freezing the tab on import.
   const MAX_RECORDS = 200_000;
   if (
     data.categories.length > MAX_RECORDS ||
     data.transactions.length > MAX_RECORDS ||
-    (Array.isArray(data.recurring) && data.recurring.length > MAX_RECORDS)
+    bracketsRaw.length > MAX_RECORDS ||
+    recurringRaw.length > MAX_RECORDS
   ) {
     throw new Error('Backup file is too large to import.');
   }
 
-  const categories = sanitizeCategories(data.categories);
+  // A pre-v5 backup has no `brackets` array at all — categories back then
+  // carried a flat `flow` field instead of belonging to a bracket. Rather
+  // than reject those backups, this synthesizes the same 4 default brackets
+  // the live Dexie v4 migration creates and infers each category's bracket
+  // from its old flow/type/name, so a backup restore never regresses behind
+  // what an in-place app upgrade would have given the same data.
+  const hasBrackets = bracketsRaw.length > 0;
+  const brackets = hasBrackets ? sanitizeBrackets(bracketsRaw) : [];
+
   const transactions = sanitizeTransactions(data.transactions);
-  const recurringRaw: unknown[] = Array.isArray(data.recurring) ? data.recurring : [];
   const recurring = sanitizeRecurring(recurringRaw);
 
   // IndexedDB's auto-increment key generator is NOT reset by clear() — that's
   // spec behavior, not a bug in this app, but it means a device that's been
-  // used for a while (ids already advanced past 1) will assign categories
-  // and recurring items brand-new ids on import that do NOT match the old
-  // ids recorded in the backup file. Without an explicit remap here, every
-  // transaction's categoryId/recurringId would silently point at the wrong
-  // row (or nothing at all) the moment a restore happens on anything but a
-  // just-installed app — this was previously flagged from test output but
-  // never actually fixed; the extractId + remap below closes it for real.
+  // used for a while (ids already advanced past 1) will assign brackets,
+  // categories, and recurring items brand-new ids on import that do NOT
+  // match the old ids recorded in the backup file. Without an explicit
+  // remap here, every category's bracketId / transaction's categoryId /
+  // recurringId would silently point at the wrong row (or nothing at all)
+  // the moment a restore happens on anything but a just-installed app.
   const extractId = (entry: unknown): number | undefined =>
     entry && typeof entry === 'object' && typeof (entry as Record<string, unknown>).id === 'number'
       ? (entry as Record<string, unknown>).id as number
       : undefined;
+  const oldBracketIds = bracketsRaw.map(extractId);
   const oldCategoryIds = (data.categories as unknown[]).map(extractId);
   const oldRecurringIds = recurringRaw.map(extractId);
 
-  await db.transaction('rw', db.categories, db.transactions, db.recurring, db.settings, async () => {
+  await db.transaction('rw', db.brackets, db.categories, db.transactions, db.recurring, db.settings, async () => {
+    await db.brackets.clear();
     await db.categories.clear();
     await db.transactions.clear();
     await db.recurring.clear();
     await db.settings.clear();
+
+    const bracketIdMap = new Map<number, number>();
+    let legacyIds: LegacyBracketIds | null = null;
+
+    if (hasBrackets) {
+      const newIds = await db.brackets.bulkAdd(stripIds<Bracket>(brackets), { allKeys: true });
+      newIds.forEach((newId, i) => {
+        const oldId = oldBracketIds[i];
+        if (typeof oldId === 'number') bracketIdMap.set(oldId, newId);
+      });
+    } else {
+      const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+      const savingsId = await db.brackets.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', kind: 'allocation' });
+      const investmentsId = await db.brackets.add({ name: 'Investments', icon: '📈', color: '#B98CF0', kind: 'allocation' });
+      const incomeId = await db.brackets.add({ name: 'Income', icon: '💼', color: '#6FC98A', kind: 'income' });
+      legacyIds = { expenditureId, savingsId, investmentsId, incomeId };
+    }
+
+    const fallbackBracketId = hasBrackets ? [...bracketIdMap.values()][0] : legacyIds!.expenditureId;
+    const categories = sanitizeCategories(data.categories, (c) => {
+      if (hasBrackets) {
+        const rawBracketId = typeof c.bracketId === 'number' ? c.bracketId : undefined;
+        const mapped = rawBracketId !== undefined ? bracketIdMap.get(rawBracketId) : undefined;
+        return mapped ?? fallbackBracketId ?? 0;
+      }
+      return legacyFlowToBracketId(c.flow, c.type, c.name, legacyIds!);
+    });
 
     const categoryIdMap = new Map<number, number>();
     if (categories.length) {
@@ -269,7 +347,46 @@ function asTxType(v: unknown): 'income' | 'expense' {
   return v === 'income' ? 'income' : 'expense';
 }
 
-function sanitizeCategories(raw: unknown[]): Category[] {
+type LegacyBracketIds = { expenditureId: number; savingsId: number; investmentsId: number; incomeId: number };
+
+/** Infers the right bracket for a category from a pre-v5 backup, which only
+ *  ever had a flat `flow` field (or, pre-v4, `type`) rather than a real
+ *  bracketId. Mirrors the same "match on the only signal available" logic
+ *  the live Dexie v4 migration uses on upgrade, so a backup restore never
+ *  regresses behind what an in-place upgrade would have given the same
+ *  data: 'income' → Income, an allocation named like "Investments" →
+ *  Investments, any other allocation → Savings, everything else → Expenditure. */
+function legacyFlowToBracketId(flow: unknown, legacyType: unknown, name: unknown, ids: LegacyBracketIds): number {
+  const resolvedFlow =
+    flow === 'spend' || flow === 'allocation' || flow === 'income'
+      ? flow
+      : legacyType === 'income'
+        ? 'income'
+        : typeof name === 'string' && name.trim() === 'Savings'
+          ? 'allocation'
+          : 'spend';
+  if (resolvedFlow === 'income') return ids.incomeId;
+  if (resolvedFlow === 'allocation') {
+    return typeof name === 'string' && /invest/i.test(name) ? ids.investmentsId : ids.savingsId;
+  }
+  return ids.expenditureId;
+}
+
+function sanitizeBrackets(raw: unknown[]): Bracket[] {
+  return raw.map((entry) => {
+    const b = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+    const kind: BracketKind = b.kind === 'allocation' || b.kind === 'income' ? b.kind : 'spend';
+    return {
+      name: asText(b.name, 60).trim() || 'Bracket',
+      icon: asText(b.icon, MAX_ICON_LEN) || '＊',
+      color: typeof b.color === 'string' && HEX_COLOR_RE.test(b.color) ? b.color : FALLBACK_COLOR,
+      kind,
+      archived: b.archived === true,
+    };
+  });
+}
+
+function sanitizeCategories(raw: unknown[], bracketIdFor: (c: Record<string, unknown>) => number): Category[] {
   return raw.map((entry) => {
     const c = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
     return {
@@ -278,7 +395,7 @@ function sanitizeCategories(raw: unknown[]): Category[] {
       color: typeof c.color === 'string' && HEX_COLOR_RE.test(c.color) ? c.color : FALLBACK_COLOR,
       budget: Math.max(0, asFiniteNumber(c.budget, 0)),
       archived: c.archived === true,
-      type: asTxType(c.type),
+      bracketId: bracketIdFor(c),
     };
   });
 }

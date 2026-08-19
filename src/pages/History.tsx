@@ -8,6 +8,7 @@ import {
   monthLabel,
   shortDate,
   todayISO,
+  iconBadgeStyle,
 } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
 import CalendarHeatmap from "../components/CalendarHeatmap";
@@ -184,10 +185,7 @@ export default function History({ currency }: { currency: string }) {
                   <div className="tx-left">
                     <div
                       className="tx-icon"
-                      style={{
-                        background: (c?.color || "#888") + "26",
-                        color: c?.color,
-                      }}
+                      style={iconBadgeStyle(c?.color)}
                     >
                       {c?.icon || "＊"}
                     </div>

@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db } from "../db/db";
-import { fmtMoney, longDate, fmtDateTime } from "../lib/format";
+import { fmtMoney, longDate, fmtDateTime, iconBadgeStyle } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
 import { ChevronLeft, Pencil, Trash2, Repeat, Receipt } from "lucide-react";
 
@@ -131,8 +131,7 @@ export default function TransactionDetail({ currency }: { currency: string }) {
               borderRadius: 17,
               fontSize: 24,
               margin: "0 auto 14px",
-              background: (category?.color || "#888") + "26",
-              color: category?.color,
+              ...iconBadgeStyle(category?.color),
             }}
           >
             {category?.icon || "＊"}

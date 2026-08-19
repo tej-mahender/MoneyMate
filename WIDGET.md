@@ -13,7 +13,7 @@ remaining step; no further coding needed.
 The web app (React) never talks to the widget directly — a widget can't run
 JavaScript or read IndexedDB. Instead:
 
-1. **`src/lib/widgetBridge.ts`** — on every Dashboard render, calls a custom native
+1. **`src/lib/widgetBridge.ts`** — on every Budget-screen render (`src/pages/Dashboard.tsx`, the category-level detail screen — not the app's Home landing screen), calls a custom native
    plugin (`WidgetBridge.updateWidget(...)`) with the current month's spent/budget/
    remaining totals. No-ops harmlessly when running as a plain website/PWA.
 2. **`WidgetBridgePlugin.java`** (`android/app/src/main/java/com/pfos/app/`) — the

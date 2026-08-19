@@ -5,6 +5,7 @@ import {
   processRecurring,
   getSettings,
   updateSettings,
+  ensureDefaultBracketsSeeded,
   ensureIncomeCategoriesSeeded,
   computeMonthSummary,
   type Frequency,
@@ -17,6 +18,7 @@ beforeEach(async () => {
   await db.transactions.clear();
   await db.recurring.clear();
   await db.categories.clear();
+  await db.brackets.clear();
   await db.settings.clear();
 });
 
@@ -63,8 +65,12 @@ describe('advanceDate', () => {
   });
 });
 
-async function makeCategory() {
-  return db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 0, type: 'expense' });
+async function makeExpenditureBracket() {
+  return db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+}
+async function makeCategory(bracketId?: number) {
+  const bid = bracketId ?? (await makeExpenditureBracket());
+  return db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 0, bracketId: bid });
 }
 
 describe('processRecurring', () => {
@@ -219,23 +225,44 @@ describe('getSettings / updateSettings', () => {
   });
 });
 
+describe('ensureDefaultBracketsSeeded', () => {
+  it('creates the 4 default brackets (Expenditure/Savings/Investments/Income) when none exist', async () => {
+    const map = await ensureDefaultBracketsSeeded();
+    expect(Object.keys(map).sort()).toEqual(['Expenditure', 'Income', 'Investments', 'Savings']);
+    const brackets = await db.brackets.toArray();
+    expect(brackets).toHaveLength(4);
+    expect(brackets.find((b) => b.name === 'Expenditure')?.kind).toBe('spend');
+    expect(brackets.find((b) => b.name === 'Savings')?.kind).toBe('allocation');
+    expect(brackets.find((b) => b.name === 'Investments')?.kind).toBe('allocation');
+    expect(brackets.find((b) => b.name === 'Income')?.kind).toBe('income');
+  });
+  it('is a no-op once brackets already exist, and does not duplicate a user-renamed bracket', async () => {
+    await ensureDefaultBracketsSeeded();
+    await db.brackets.toCollection().modify({ name: 'Renamed Bracket' });
+    await ensureDefaultBracketsSeeded();
+    expect(await db.brackets.count()).toBe(4);
+  });
+});
+
 describe('ensureIncomeCategoriesSeeded', () => {
-  it('seeds the default income categories when none exist', async () => {
+  it('seeds the default income categories under the Income bracket when none exist', async () => {
     await ensureIncomeCategoriesSeeded();
-    const incomeCats = await db.categories.where('type').equals('income').toArray();
+    const incomeBracket = await db.brackets.where('name').equals('Income').first();
+    const incomeCats = await db.categories.where('bracketId').equals(incomeBracket!.id!).toArray();
     expect(incomeCats.length).toBeGreaterThan(0);
   });
   it('does not duplicate or overwrite categories the user already customized', async () => {
-    await db.categories.add({ name: 'My custom income', icon: '💵', color: '#000000', budget: 0, type: 'income' });
+    const brackets = await ensureDefaultBracketsSeeded();
+    await db.categories.add({ name: 'My custom income', icon: '💵', color: '#000000', budget: 0, bracketId: brackets['Income'] });
     await ensureIncomeCategoriesSeeded();
-    const incomeCats = await db.categories.where('type').equals('income').toArray();
+    const incomeCats = await db.categories.where('bracketId').equals(brackets['Income']).toArray();
     expect(incomeCats).toHaveLength(1);
     expect(incomeCats[0].name).toBe('My custom income');
   });
 });
 
 describe('computeMonthSummary', () => {
-  it('sums only expense transactions against the total expense-category budget for the current month', async () => {
+  it('sums only expense transactions against the total spend-bracket category budget for the current month', async () => {
     // Deliberately no fake timers (see the note on processRecurring above —
     // it breaks fake-indexeddb). computeMonthSummary() does read the real
     // system clock internally, so instead of mocking "now" this derives
@@ -245,8 +272,10 @@ describe('computeMonthSummary', () => {
     const thisMonthDate = `${thisMonthKey}-01`;
     const otherMonthDate = `${otherMonthKey}-01`;
 
-    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, type: 'expense' });
-    const salaryId = await db.categories.add({ name: 'Salary', icon: '💼', color: '#4FD9B8', budget: 0, type: 'income' });
+    const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+    const incomeId = await db.brackets.add({ name: 'Income', icon: '💼', color: '#6FC98A', kind: 'income' });
+    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
+    const salaryId = await db.categories.add({ name: 'Salary', icon: '💼', color: '#4FD9B8', budget: 0, bracketId: incomeId });
 
     await db.transactions.add({ type: 'expense', amount: 15000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
     await db.transactions.add({ type: 'income', amount: 50000, categoryId: salaryId, date: thisMonthDate, createdAt: Date.now() });
@@ -255,8 +284,57 @@ describe('computeMonthSummary', () => {
 
     const summary = await computeMonthSummary();
     expect(summary.spent).toBe(15000);
-    expect(summary.budget).toBe(20000); // income category budgets excluded
+    expect(summary.budget).toBe(20000); // Income bracket's category budgets excluded
     expect(summary.remaining).toBe(5000);
     expect(summary.monthKey).toBe(thisMonthKey);
+  });
+
+  it('excludes allocation-bracket spend (Savings, Investments, EMI…) from both the budget cap and the spent total', async () => {
+    const thisMonthDate = `${monthKey(todayISO())}-01`;
+    const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+    const savingsBracketId = await db.brackets.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', kind: 'allocation' });
+    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
+    const savingsId = await db.categories.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', budget: 10000, bracketId: savingsBracketId });
+
+    await db.transactions.add({ type: 'expense', amount: 15000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
+    // Money moved into Savings — a transfer, not spend against the cap.
+    await db.transactions.add({ type: 'expense', amount: 10000, categoryId: savingsId, date: thisMonthDate, createdAt: Date.now() });
+
+    const summary = await computeMonthSummary();
+    expect(summary.spent).toBe(15000); // Savings' 10000 excluded
+    expect(summary.budget).toBe(20000); // Savings' target excluded from the cap
+    expect(summary.remaining).toBe(5000);
+  });
+
+  it('aggregates across multiple spend-kind brackets (e.g. a custom second one alongside Expenditure)', async () => {
+    const thisMonthDate = `${monthKey(todayISO())}-01`;
+    const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+    const workExpensesId = await db.brackets.add({ name: 'Work Expenses', icon: '💼', color: '#F0A83E', kind: 'spend' });
+    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
+    const travelId = await db.categories.add({ name: 'Travel', icon: '✈️', color: '#F0A83E', budget: 5000, bracketId: workExpensesId });
+
+    await db.transactions.add({ type: 'expense', amount: 15000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
+    await db.transactions.add({ type: 'expense', amount: 3000, categoryId: travelId, date: thisMonthDate, createdAt: Date.now() });
+
+    const summary = await computeMonthSummary();
+    expect(summary.budget).toBe(25000);
+    expect(summary.spent).toBe(18000);
+  });
+
+  it('excludes an archived category\'s budget from the cap, but still counts its this-month spend', async () => {
+    const thisMonthDate = `${monthKey(todayISO())}-01`;
+    const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
+    const oldGymId = await db.categories.add({
+      name: 'Gym (old)', icon: '🏋️', color: '#F0B94D', budget: 3000, bracketId: expenditureId, archived: true,
+    });
+
+    await db.transactions.add({ type: 'expense', amount: 15000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
+    await db.transactions.add({ type: 'expense', amount: 1000, categoryId: oldGymId, date: thisMonthDate, createdAt: Date.now() });
+
+    const summary = await computeMonthSummary();
+    expect(summary.budget).toBe(20000); // Gym's archived 3000 budget excluded
+    expect(summary.spent).toBe(16000); // its historical spend still counts
+    expect(summary.remaining).toBe(4000);
   });
 });

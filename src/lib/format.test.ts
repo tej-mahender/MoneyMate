@@ -15,6 +15,7 @@ import {
   isoWeek,
   addMonths,
   daysBetween,
+  iconBadgeStyle,
 } from './format';
 
 describe('todayISO', () => {
@@ -242,5 +243,26 @@ describe('daysBetween', () => {
     // are parsed via `T00:00:00` local time, so the diff must land on a
     // whole-number day boundary regardless of the runtime's timezone.
     expect(daysBetween('2026-01-01', '2026-12-31')).toBe(364);
+  });
+});
+
+describe('iconBadgeStyle', () => {
+  it('applies a visibly-tinted background and a color-matched border, not the old barely-visible 15% tint', () => {
+    const style = iconBadgeStyle('#7C93F0');
+    expect(style.background).toBe('#7C93F040');
+    expect(style.color).toBe('#7C93F0');
+    expect(style.borderColor).toBe('#7C93F080');
+    // Regression guard: the previous inline pattern this replaced used a
+    // "26" hex-alpha suffix (~15% opacity) for the background and never
+    // set a border color at all, which is what made every bracket/category
+    // badge read as the same dull grey box regardless of its own color.
+    expect(style.background).not.toContain('26');
+  });
+
+  it('falls back to a neutral grey rather than crashing on an uncategorized/undefined color', () => {
+    const style = iconBadgeStyle(undefined);
+    expect(style.color).toBe('#888888');
+    expect(style.background).toBe('#88888840');
+    expect(style.borderColor).toBe('#88888880');
   });
 });

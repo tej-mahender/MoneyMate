@@ -4,6 +4,8 @@ import { db } from '../db/db';
 import {
   exportTransactionsCSV,
   exportCategoriesCSV,
+  exportBracketsCSV,
+  exportMonthlySummaryCSV,
   exportFullBackup,
   importFullBackup,
   SCHEMA_VERSION,
@@ -12,6 +14,7 @@ import {
 beforeEach(async () => {
   await db.transactions.clear();
   await db.categories.clear();
+  await db.brackets.clear();
   await db.recurring.clear();
   await db.settings.clear();
 });
@@ -20,10 +23,15 @@ function parseCsv(csv: string): Record<string, string>[] {
   return Papa.parse(csv, { header: true, skipEmptyLines: true }).data as Record<string, string>[];
 }
 
+async function makeExpenditureBracket() {
+  return db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+}
+
 describe('CSV export — formula injection protection', () => {
   it('prefixes a category name starting with "=" so spreadsheet apps treat it as text, not a formula', async () => {
+    const bracketId = await makeExpenditureBracket();
     await db.categories.add({
-      name: '=cmd|"/C calc"!A1', icon: '🏠', color: '#F0B94D', budget: 0, type: 'expense',
+      name: '=cmd|"/C calc"!A1', icon: '🏠', color: '#F0B94D', budget: 0, bracketId,
     });
     const rows = parseCsv(await exportCategoriesCSV());
     expect(rows[0].Name.startsWith("'")).toBe(true);
@@ -31,7 +39,8 @@ describe('CSV export — formula injection protection', () => {
   });
 
   it.each(['=', '+', '-', '@'])('sanitizes a merchant field starting with "%s"', async (prefix) => {
-    const catId = await db.categories.add({ name: 'Shopping', icon: '🛍️', color: '#E8618C', budget: 0, type: 'expense' });
+    const bracketId = await makeExpenditureBracket();
+    const catId = await db.categories.add({ name: 'Shopping', icon: '🛍️', color: '#E8618C', budget: 0, bracketId });
     await db.transactions.add({
       type: 'expense', amount: 100, categoryId: catId, date: '2026-08-06',
       merchant: `${prefix}HYPERLINK("http://evil.example")`, createdAt: Date.now(),
@@ -41,15 +50,58 @@ describe('CSV export — formula injection protection', () => {
   });
 
   it('leaves ordinary text completely unmodified', async () => {
-    await db.categories.add({ name: 'Groceries', icon: '🍲', color: '#6FC98A', budget: 0, type: 'expense' });
+    const bracketId = await makeExpenditureBracket();
+    await db.categories.add({ name: 'Groceries', icon: '🍲', color: '#6FC98A', budget: 0, bracketId });
     const rows = parseCsv(await exportCategoriesCSV());
     expect(rows[0].Name).toBe('Groceries');
   });
 
   it('does not falsely flag text that merely contains, but does not start with, a trigger character', async () => {
-    await db.categories.add({ name: 'Coffee @ Home', icon: '☕', color: '#6FC98A', budget: 0, type: 'expense' });
+    const bracketId = await makeExpenditureBracket();
+    await db.categories.add({ name: 'Coffee @ Home', icon: '☕', color: '#6FC98A', budget: 0, bracketId });
     const rows = parseCsv(await exportCategoriesCSV());
     expect(rows[0].Name).toBe('Coffee @ Home');
+  });
+});
+
+describe('exportCategoriesCSV / exportBracketsCSV — bracket dimension columns', () => {
+  it('tags each category row with its bracket id/name/kind, so a spend cap and an allocation target are never silently averaged together', async () => {
+    const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+    const savingsBracketId = await db.brackets.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', kind: 'allocation' });
+    await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
+    await db.categories.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', budget: 10000, bracketId: savingsBracketId });
+
+    const rows = parseCsv(await exportCategoriesCSV());
+    const rentRow = rows.find((r) => r.Name === 'Rent');
+    const savingsRow = rows.find((r) => r.Name === 'Savings');
+    expect(rentRow?.BracketKind).toBe('spend');
+    expect(rentRow?.BracketName).toBe('Expenditure');
+    expect(savingsRow?.BracketKind).toBe('allocation');
+    expect(savingsRow?.BracketName).toBe('Savings');
+  });
+
+  it('exports a bracket dimension table with kind and id', async () => {
+    await db.brackets.add({ name: 'Investments', icon: '📈', color: '#B98CF0', kind: 'allocation' });
+    const rows = parseCsv(await exportBracketsCSV());
+    expect(rows[0].Name).toBe('Investments');
+    expect(rows[0].Kind).toBe('allocation');
+  });
+});
+
+describe('exportMonthlySummaryCSV — bracket columns distinguish budget caps from allocation targets', () => {
+  it('tags each row with its bracket kind, so a spend cap and an allocation target are never silently averaged together', async () => {
+    const expenditureId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
+    const savingsBracketId = await db.brackets.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', kind: 'allocation' });
+    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
+    const savingsId = await db.categories.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', budget: 10000, bracketId: savingsBracketId });
+    await db.transactions.add({ type: 'expense', amount: 15000, categoryId: rentId, date: '2026-08-05', createdAt: Date.now() });
+    await db.transactions.add({ type: 'expense', amount: 10000, categoryId: savingsId, date: '2026-08-05', createdAt: Date.now() });
+
+    const rows = parseCsv(await exportMonthlySummaryCSV());
+    const rentRow = rows.find((r) => r.CategoryName === 'Rent');
+    const savingsRow = rows.find((r) => r.CategoryName === 'Savings');
+    expect(rentRow?.BracketKind).toBe('spend');
+    expect(savingsRow?.BracketKind).toBe('allocation');
   });
 });
 
@@ -86,6 +138,53 @@ describe('importFullBackup — structural validation', () => {
     const hugeArray = Array.from({ length: 200_001 }, (_, i) => ({ name: `Cat ${i}` }));
     const payload = JSON.stringify({ categories: hugeArray, transactions: [] });
     await expect(importFullBackup(payload)).rejects.toThrow(/too large/i);
+  });
+});
+
+describe('importFullBackup — pre-v5 legacy backups (no brackets array)', () => {
+  it('synthesizes the 4 default brackets and assigns categories by their old flow/type/name, matching the live Dexie v4 migration', async () => {
+    const payload = JSON.stringify({
+      schemaVersion: 4,
+      categories: [
+        { id: 1, name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, flow: 'spend' },
+        { id: 2, name: 'Salary', icon: '💼', color: '#4FD9B8', budget: 0, flow: 'income' },
+        { id: 3, name: 'Investments', icon: '📈', color: '#B98CF0', budget: 5000, flow: 'allocation' },
+        { id: 4, name: 'Savings', icon: '💰', color: '#4FD9B8', budget: 3000, flow: 'allocation' },
+      ],
+      transactions: [],
+    });
+    await importFullBackup(payload);
+
+    const brackets = await db.brackets.toArray();
+    expect(brackets.map((b) => b.name).sort()).toEqual(['Expenditure', 'Income', 'Investments', 'Savings']);
+
+    const cats = await db.categories.toArray();
+    const bracketById = new Map(brackets.map((b) => [b.id, b]));
+    const rent = cats.find((c) => c.name === 'Rent')!;
+    const salary = cats.find((c) => c.name === 'Salary')!;
+    const investments = cats.find((c) => c.name === 'Investments')!;
+    const savings = cats.find((c) => c.name === 'Savings')!;
+    expect(bracketById.get(rent.bracketId)?.name).toBe('Expenditure');
+    expect(bracketById.get(salary.bracketId)?.name).toBe('Income');
+    expect(bracketById.get(investments.bracketId)?.name).toBe('Investments');
+    expect(bracketById.get(savings.bracketId)?.name).toBe('Savings');
+  });
+
+  it('an even older (pre-v4) backup using `type` instead of `flow` still imports correctly', async () => {
+    const payload = JSON.stringify({
+      schemaVersion: 3,
+      categories: [
+        { id: 1, name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, type: 'expense' },
+        { id: 2, name: 'Salary', icon: '💼', color: '#4FD9B8', budget: 0, type: 'income' },
+      ],
+      transactions: [],
+    });
+    await importFullBackup(payload);
+    const brackets = await db.brackets.toArray();
+    const cats = await db.categories.toArray();
+    const bracketById = new Map(brackets.map((b) => [b.id, b]));
+    expect(bracketById.get(cats.find((c) => c.name === 'Rent')!.bracketId)?.kind).toBe('spend');
+    expect(bracketById.get(cats.find((c) => c.name === 'Salary')!.bracketId)?.kind).toBe('income');
   });
 });
 
@@ -186,31 +285,38 @@ describe('importFullBackup — field sanitization (untrusted data)', () => {
   });
 });
 
-describe('importFullBackup — category/recurring id remapping', () => {
+describe('importFullBackup — bracket/category/recurring id remapping', () => {
   it('SECURITY/CORRECTNESS: preserves the category-transaction link correctly even on a device that has been used for a while (auto-increment counter already advanced past 1)', async () => {
     // IndexedDB's key generator is NOT reset by clear() — confirmed
     // empirically against fake-indexeddb. Simulate that drift explicitly
     // instead of relying on a fresh test DB coincidentally starting at 1,
     // which would hide exactly this bug.
-    const churnId = await db.categories.add({ name: 'Temp', icon: '🗑️', color: '#000000', budget: 0, type: 'expense' });
+    const churnBracketId = await makeExpenditureBracket();
+    const churnId = await db.categories.add({ name: 'Temp', icon: '🗑️', color: '#000000', budget: 0, bracketId: churnBracketId });
     await db.categories.delete(churnId); // counter has now advanced past 1
 
-    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, type: 'expense' });
+    const expenditureId = await makeExpenditureBracket();
+    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
     await db.transactions.add({ type: 'expense', amount: 15000, categoryId: rentId, date: '2026-08-05', createdAt: Date.now() });
 
     const backup = await exportFullBackup();
     await db.transactions.clear();
     await db.categories.clear();
+    await db.brackets.clear();
 
     await importFullBackup(backup);
 
     const restoredCat = (await db.categories.toArray())[0];
     const restoredTx = (await db.transactions.toArray())[0];
+    const restoredBrackets = await db.brackets.toArray();
+    const restoredBracket = restoredBrackets.find((b) => b.id === restoredCat.bracketId);
     // The whole point: even though the re-inserted category's new id is
     // guaranteed to NOT equal its old id (rentId) after the churn above,
-    // the transaction must still correctly point at it.
+    // the transaction must still correctly point at it, and the category
+    // must still correctly point at its (also re-inserted) bracket.
     expect(restoredCat.id).not.toBe(rentId);
     expect(restoredTx.categoryId).toBe(restoredCat.id);
+    expect(restoredBracket).toBeDefined();
     expect(restoredCat.name).toBe('Rent');
   });
 
@@ -229,8 +335,9 @@ describe('importFullBackup — category/recurring id remapping', () => {
 });
 
 describe('importFullBackup — end-to-end round trip', () => {
-  it('a full export can be imported back and reproduces the same data', async () => {
-    const catId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, type: 'expense' });
+  it('a full export (including brackets) can be imported back and reproduces the same data', async () => {
+    const bracketId = await makeExpenditureBracket();
+    const catId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId });
     await db.transactions.add({ type: 'expense', amount: 15000, categoryId: catId, date: '2026-08-05', createdAt: Date.now() });
     await db.recurring.add({
       name: 'Rent', type: 'expense', amount: 20000, categoryId: catId,
@@ -241,10 +348,12 @@ describe('importFullBackup — end-to-end round trip', () => {
 
     await db.transactions.clear();
     await db.categories.clear();
+    await db.brackets.clear();
     await db.recurring.clear();
 
     await importFullBackup(backup);
 
+    expect(await db.brackets.count()).toBe(1);
     expect(await db.categories.count()).toBe(1);
     expect(await db.transactions.count()).toBe(1);
     expect(await db.recurring.count()).toBe(1);
@@ -258,7 +367,8 @@ describe('importFullBackup — end-to-end round trip', () => {
   });
 
   it('completely replaces existing data rather than merging with it', async () => {
-    await db.categories.add({ name: 'Old category', icon: '🗑️', color: '#000000', budget: 0, type: 'expense' });
+    const bracketId = await makeExpenditureBracket();
+    await db.categories.add({ name: 'Old category', icon: '🗑️', color: '#000000', budget: 0, bracketId });
     const payload = JSON.stringify({
       categories: [{ name: 'New category', type: 'expense' }],
       transactions: [],

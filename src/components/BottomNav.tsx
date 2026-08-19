@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
+  Home as HomeIcon,
   LayoutGrid,
   History as HistoryIcon,
   PieChart,
@@ -9,7 +10,8 @@ import {
 } from "lucide-react";
 
 const tabs = [
-  { to: "/", label: "Home", end: true, Icon: LayoutGrid },
+  { to: "/", label: "Home", end: true, Icon: HomeIcon },
+  { to: "/budget", label: "Budget", Icon: LayoutGrid },
   { to: "/history", label: "History", Icon: HistoryIcon },
   { to: "/analytics", label: "Insights", Icon: PieChart },
   { to: "/settings", label: "Settings", Icon: SettingsIcon },

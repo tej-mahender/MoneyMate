@@ -1,10 +1,13 @@
 import { useState } from "react";
 import {
   db,
-  DEFAULT_CATEGORIES,
+  DEFAULT_EXPENDITURE_CATEGORIES,
+  DEFAULT_BRACKETS,
+  ensureDefaultBracketsSeeded,
   updateSettings,
   ensureIncomeCategoriesSeeded,
 } from "../db/db";
+import { iconBadgeStyle } from "../lib/format";
 import { PiggyBank, IndianRupee, CreditCard, X } from "lucide-react";
 import IconPicker from "../components/IconPicker";
 import moneyMateIcon from "../assets/moneymate-icon.png";
@@ -13,6 +16,11 @@ import moneyMateIconWebp from "../assets/moneymate-icon.webp";
 const CURRENCIES = ["₹", "$", "€", "£"];
 
 type DraftCat = { name: string; icon: string; color: string; budget: string };
+
+// The 3 brackets a person actually divides their income into during
+// onboarding. Income itself isn't "divided into" — it's the source, shown
+// alongside these for context but not editable here.
+const DIVIDABLE_BRACKETS = DEFAULT_BRACKETS.filter((b) => b.kind !== "income");
 
 const PALETTE = [
   "#F0B94D",
@@ -59,6 +67,7 @@ function StepDots({ active }: { active: number }) {
       <span className={active === 0 ? "active" : ""} />
       <span className={active === 1 ? "active" : ""} />
       <span className={active === 2 ? "active" : ""} />
+      <span className={active === 3 ? "active" : ""} />
     </div>
   );
 }
@@ -67,50 +76,114 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
   const [currency, setCurrency] = useState("₹");
   const [income, setIncome] = useState("");
-  const [cats, setCats] = useState<DraftCat[]>(
-    DEFAULT_CATEGORIES.map((c) => ({
+
+  // Step 2 — the top-level split: how much of your income goes toward each
+  // bracket. This is a planning number, not stored anywhere directly — a
+  // bracket's real total is always the sum of its categories' budgets (see
+  // db.ts), so this either becomes one lump-sum starter category (if the
+  // person skips step 3 for that bracket) or is just discarded once real
+  // categories exist for it.
+  const [bracketAmounts, setBracketAmounts] = useState<Record<string, string>>({});
+  function setBracketAmount(name: string, val: string) {
+    setBracketAmounts((prev) => ({ ...prev, [name]: val }));
+  }
+  const totalAllocated = DIVIDABLE_BRACKETS.reduce(
+    (s, b) => s + (parseFloat(bracketAmounts[b.name]) || 0),
+    0,
+  );
+  const incomeNum = parseFloat(income) || 0;
+  const unallocated = incomeNum - totalAllocated;
+
+  // Step 3 — optional sub-categories per bracket. Expenditure starts
+  // pre-filled with common categories (the everyday-spend case almost
+  // everyone wants); Savings and Investments start empty — Portfolio, Gold,
+  // Emergency Fund, or whatever the person actually holds, added only if
+  // they want that level of detail. Skipping a bracket entirely here just
+  // means it keeps the single lump-sum amount from step 2.
+  const [catsByBracket, setCatsByBracket] = useState<Record<string, DraftCat[]>>({
+    Expenditure: DEFAULT_EXPENDITURE_CATEGORIES.map((c) => ({
       name: c.name,
       icon: c.icon,
       color: c.color,
       budget: "",
     })),
-  );
+    Savings: [],
+    Investments: [],
+  });
   const [saving, setSaving] = useState(false);
 
-  function updateCat(i: number, field: keyof DraftCat, val: string) {
-    setCats((prev) =>
-      prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)),
-    );
-  }
-  function addCat() {
-    setCats((prev) => [
+  function updateCat(bracketName: string, i: number, field: keyof DraftCat, val: string) {
+    setCatsByBracket((prev) => ({
       ...prev,
-      {
-        name: "",
-        icon: "＊",
-        color: PALETTE[prev.length % PALETTE.length],
-        budget: "",
-      },
-    ]);
+      [bracketName]: prev[bracketName].map((c, idx) => (idx === i ? { ...c, [field]: val } : c)),
+    }));
   }
-  function removeCat(i: number) {
-    setCats((prev) => prev.filter((_, idx) => idx !== i));
+  function addCat(bracketName: string) {
+    setCatsByBracket((prev) => ({
+      ...prev,
+      [bracketName]: [
+        ...prev[bracketName],
+        { name: "", icon: "＊", color: PALETTE[prev[bracketName].length % PALETTE.length], budget: "" },
+      ],
+    }));
+  }
+  function removeCat(bracketName: string, i: number) {
+    setCatsByBracket((prev) => ({
+      ...prev,
+      [bracketName]: prev[bracketName].filter((_, idx) => idx !== i),
+    }));
   }
 
   async function finish() {
-    const clean = cats
-      .map((c) => ({
-        name: c.name.trim(),
-        icon: c.icon || "＊",
-        color: c.color,
-        budget: parseFloat(c.budget) || 0,
-        type: "expense" as const,
-      }))
-      .filter((c) => c.name.length > 0);
-    if (clean.length === 0) return;
     setSaving(true);
-    await db.categories.bulkAdd(clean);
-    const monthlyIncome = parseFloat(income) || 0;
+    // Seeds all 4 default brackets (Expenditure/Savings/Investments/Income)
+    // up front so the underlying structure is correct from minute one.
+    const bracketIds = await ensureDefaultBracketsSeeded();
+
+    for (const bracket of DIVIDABLE_BRACKETS) {
+      const clean = (catsByBracket[bracket.name] ?? [])
+        .map((c) => ({
+          name: c.name.trim(),
+          icon: c.icon || bracket.icon,
+          color: c.color,
+          budget: parseFloat(c.budget) || 0,
+        }))
+        .filter((c) => c.name.length > 0);
+
+      if (clean.length > 0) {
+        await db.categories.bulkAdd(clean.map((c) => ({ ...c, bracketId: bracketIds[bracket.name] })));
+      }
+
+      // Whether the step-2 lump sum still needs to be applied depends on
+      // whether any *real* budget was entered per-category — not just
+      // whether named categories exist. Expenditure always arrives here
+      // with 7 pre-filled names (Rent, Food, …) even when every budget is
+      // left blank, so checking clean.length alone would treat that as "the
+      // person subdivided it" and silently drop the step-2 number. Checking
+      // the actual budget total instead means an untouched default list is
+      // correctly treated the same as an empty one.
+      const categoryBudgetTotal = clean.reduce((s, c) => s + c.budget, 0);
+      if (categoryBudgetTotal === 0) {
+        const amount = parseFloat(bracketAmounts[bracket.name]) || 0;
+        if (amount > 0) {
+          // No real per-category budgets for this bracket — fall back to a
+          // lump-sum category matching the bracket's own step-2 amount, so
+          // it isn't left at ₹0 just because step 3 was skipped or left
+          // blank. Named alongside any existing (zero-budget) categories as
+          // "General" rather than replacing them, so starter categories
+          // like Rent/Food are still there ready to be filled in later.
+          await db.categories.add({
+            name: clean.length > 0 ? "General" : bracket.name,
+            icon: bracket.icon,
+            color: bracket.color,
+            budget: amount,
+            bracketId: bracketIds[bracket.name],
+          });
+        }
+      }
+    }
+
+    const monthlyIncome = incomeNum;
     if (monthlyIncome > 0) await ensureIncomeCategoriesSeeded();
     await updateSettings({
       onboarded: true,
@@ -205,7 +278,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               />
               <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
                 {Number(income) > 0
-                  ? "Savings will be tracked automatically each month, alongside your category budgets."
+                  ? "Home will show this against your spending, savings, and investments, and what's left unallocated."
                   : "Leave this blank if you\u2019d rather just track spending against your category budgets — that\u2019s a common way to use this app, and nothing forces you to log income."}
               </p>
               <button className="btn" onClick={() => setStep(2)}>
@@ -221,53 +294,118 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         {step === 2 && (
           <div className="shell-content">
             <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
-              <h1 style={{ fontSize: 21 }}>Set your budgets</h1>
+              <h1 style={{ fontSize: 21 }}>Divide it up</h1>
               <p>
-                Add each category you spend on and a monthly cap. You can change
-                these anytime.
+                A rough split is enough to start — Rent vs. Food vs. everything else comes next. You can leave any
+                of these at 0 and fill them in later.
               </p>
               <StepDots active={2} />
             </div>
             <div className="card">
-              <h2>Categories</h2>
-              {cats.map((c, i) => (
-                <div className="cat-edit-row" key={i}>
-                  <IconPicker
-                    icon={c.icon}
-                    color={c.color}
-                    palette={PALETTE}
-                    onIconChange={(icon) => updateCat(i, "icon", icon)}
-                    onColorChange={(color) => updateCat(i, "color", color)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Category"
-                    value={c.name}
-                    onChange={(e) => updateCat(i, "name", e.target.value)}
-                  />
+              <h2>Brackets</h2>
+              {incomeNum > 0 && (
+                <div className="cat-edit-row" style={{ borderBottom: "1px dashed var(--surface-border)" }}>
+                  <div className="tx-icon" style={{ background: "color-mix(in srgb, var(--good) 18%, transparent)", color: "var(--good)" }}>
+                    💼
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>Income</div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {currency}
+                      {incomeNum.toLocaleString()} · from the last step
+                    </div>
+                  </div>
+                </div>
+              )}
+              {DIVIDABLE_BRACKETS.map((b) => (
+                <div className="cat-edit-row" key={b.name}>
+                  <div className="tx-icon" style={iconBadgeStyle(b.color)}>
+                    {b.icon}
+                  </div>
+                  <input type="text" value={b.name} disabled style={{ flex: 1, opacity: 0.75 }} />
                   <input
                     type="number"
-                    placeholder="Budget"
-                    value={c.budget}
-                    onChange={(e) => updateCat(i, "budget", e.target.value)}
+                    placeholder="0"
+                    value={bracketAmounts[b.name] ?? ""}
+                    onChange={(e) => setBracketAmount(b.name, e.target.value)}
                     onWheel={(e) => e.currentTarget.blur()}
                   />
-                  <button
-                    className="icon-btn danger"
-                    onClick={() => removeCat(i)}
-                    aria-label="Remove"
-                  >
-                    <X size={15} />
-                  </button>
                 </div>
               ))}
-              <button className="btn secondary" onClick={addCat}>
-                + Add category
+              {incomeNum > 0 && (
+                <p className={"muted"} style={{ marginTop: 8, color: unallocated < 0 ? "var(--danger, #FF6B6B)" : undefined }}>
+                  {unallocated >= 0
+                    ? `${currency}${unallocated.toLocaleString()} unallocated so far`
+                    : `${currency}${Math.abs(unallocated).toLocaleString()} over your income — you can adjust these later anytime`}
+                </p>
+              )}
+              <button className="btn" onClick={() => setStep(3)}>
+                Continue
               </button>
+              <button className="btn ghost" onClick={() => setStep(1)}>
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="shell-content">
+            <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
+              <h1 style={{ fontSize: 21 }}>Break it down (optional)</h1>
+              <p>
+                Split any bracket into specific categories — Rent/Food under Expenditure, Portfolio/Gold under
+                Investments, whatever you actually track. Skip a bracket entirely and it just keeps the lump-sum
+                amount from the last step.
+              </p>
+              <StepDots active={3} />
+            </div>
+            {DIVIDABLE_BRACKETS.map((b) => (
+              <div className="card" key={b.name}>
+                <h2>
+                  {b.icon} {b.name}
+                </h2>
+                {(catsByBracket[b.name] ?? []).map((c, i) => (
+                  <div className="cat-edit-row" key={i}>
+                    <IconPicker
+                      icon={c.icon}
+                      color={c.color}
+                      palette={PALETTE}
+                      onIconChange={(icon) => updateCat(b.name, i, "icon", icon)}
+                      onColorChange={(color) => updateCat(b.name, i, "color", color)}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Category"
+                      value={c.name}
+                      onChange={(e) => updateCat(b.name, i, "name", e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Budget"
+                      value={c.budget}
+                      onChange={(e) => updateCat(b.name, i, "budget", e.target.value)}
+                      onWheel={(e) => e.currentTarget.blur()}
+                    />
+                    <button
+                      className="icon-btn danger"
+                      onClick={() => removeCat(b.name, i)}
+                      aria-label="Remove"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                ))}
+                <button className="btn secondary" onClick={() => addCat(b.name)}>
+                  + Add category
+                </button>
+              </div>
+            ))}
+            <div className="card">
               <button className="btn" disabled={saving} onClick={finish}>
                 {saving ? "Setting up…" : "Start tracking"}
               </button>
-              <button className="btn ghost" onClick={() => setStep(1)}>
+              <button className="btn ghost" onClick={() => setStep(2)}>
                 Back
               </button>
             </div>

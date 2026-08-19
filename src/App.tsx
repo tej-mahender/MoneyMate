@@ -14,16 +14,20 @@ import {
 } from "./db/db";
 import { todayISO } from "./lib/format";
 import { consumePendingWidgetRoute } from "./lib/widgetBridge";
-import Dashboard from "./pages/Dashboard";
+import Overview from "./pages/Overview";
 import BottomNav from "./components/BottomNav";
 import Toast from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 
-// Code-split everything except Dashboard, which is the landing screen on
-// every normal launch and should paint immediately with no extra network
-// round-trip. The rest — especially Analytics, which alone pulls in the
-// recharts dependency — only need to load once the person actually
-// navigates there, so they shouldn't cost anything on first paint.
+// Code-split everything except Overview (Home), which is the landing screen
+// on every normal launch and should paint immediately with no extra network
+// round-trip. The rest — including Dashboard/Budget, now a drill-down one
+// tap away rather than the landing screen, and especially Analytics, which
+// alone pulls in the recharts dependency — only need to load once the
+// person actually navigates there, so they shouldn't cost anything on first
+// paint.
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const BracketDetail = lazy(() => import("./pages/BracketDetail"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AddTransaction = lazy(() => import("./pages/AddTransaction"));
 const History = lazy(() => import("./pages/History"));
@@ -83,14 +87,31 @@ function AnimatedRoutes({
               <Route
                 path="/"
                 element={
-                  <Dashboard
+                  <Overview
                     currency={settings.currency}
                     monthlyIncome={settings.monthlyIncome}
-                    hideWidgetAmounts={settings.hideWidgetAmounts}
                   />
                 }
               />
               <Route path="/add" element={<AddTransaction />} />
+              <Route
+                path="/budget"
+                element={
+                  <Dashboard
+                    currency={settings.currency}
+                    hideWidgetAmounts={settings.hideWidgetAmounts}
+                  />
+                }
+              />
+              <Route
+                path="/bracket/:id"
+                element={
+                  <BracketDetail
+                    currency={settings.currency}
+                    monthlyIncome={settings.monthlyIncome}
+                  />
+                }
+              />
               <Route
                 path="/history"
                 element={<History currency={settings.currency} />}

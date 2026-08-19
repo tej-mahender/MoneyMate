@@ -30,7 +30,7 @@ interface WidgetBridgePlugin {
   updateWidget(options: WidgetSnapshot): Promise<{ ok: boolean }>;
   /** Reads (and clears) a pending in-app route the native side stashed —
    *  currently just the widget's "+" button asking to land straight on
-   *  /add instead of the dashboard. Returns { route: null } normally. */
+   *  /add instead of Home. Returns { route: null } normally. */
   getPendingRoute(): Promise<{ route: string | null }>;
 }
 
@@ -38,7 +38,7 @@ const WidgetBridge = registerPlugin<WidgetBridgePlugin>("WidgetBridge");
 
 /**
  * Pushes the current month's totals to the native home-screen widget.
- * Safe to call on every dashboard render — it's a no-op in the browser/PWA
+ * Safe to call on every Budget-screen render — it's a no-op in the browser/PWA
  * and only does anything inside the Capacitor Android wrapper.
  */
 export async function syncWidget(snapshot: WidgetSnapshot): Promise<void> {
@@ -46,7 +46,7 @@ export async function syncWidget(snapshot: WidgetSnapshot): Promise<void> {
   try {
     await WidgetBridge.updateWidget(snapshot);
   } catch (err) {
-    // Widget sync is best-effort — never let it break the dashboard.
+    // Widget sync is best-effort — never let it break the Budget screen.
     console.warn("Widget sync failed", err);
   }
 }

@@ -18,14 +18,19 @@ export default function AddTransaction() {
   );
   const showToast = useUIStore((s) => s.showToast);
   const allCategories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const allBrackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
+  const bracketKindById = new Map(allBrackets.map((b) => [b.id, b.kind]));
+  const bracketById = new Map(allBrackets.map((b) => [b.id, b]));
 
   const [type, setType] = useState<TxType>("expense");
   // Income and expense are structurally different concepts — a budget category
   // like "Food" makes no sense for a salary deposit, so they get separate lists
   // rather than sharing one (see Settings → Income sources for how these are managed).
-  const categories = allCategories.filter((c) =>
-    type === "income" ? c.type === "income" : c.type !== "income",
-  );
+  const categories = allCategories.filter((c) => {
+    const bracket = bracketById.get(c.bracketId);
+    if (!bracket || bracket.archived) return false; // hidden bracket, or an orphaned category with no bracket at all
+    return type === "income" ? bracket.kind === "income" : bracket.kind !== "income";
+  });
 
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
@@ -120,7 +125,12 @@ export default function AddTransaction() {
       setNote("");
       setMerchant("");
     } else {
-      navigate("/");
+      // Spend-category transactions land on Budget (Rent/Food/etc.) for
+      // immediate feedback on the category cap; allocation and income
+      // transactions land on Home, since Budget never shows those at all.
+      const cat = categories.find((c) => c.id === categoryId);
+      const kind = cat ? bracketKindById.get(cat.bracketId) : undefined;
+      navigate(kind === "spend" ? "/budget" : "/");
     }
   }
 
@@ -189,10 +199,11 @@ export default function AddTransaction() {
                 id="cat"
                 value={categoryId != null ? String(categoryId) : ""}
                 onChange={(v) => setCategoryId(Number(v))}
-                options={categories.map((c) => ({
-                  value: String(c.id),
-                  label: `${c.icon} ${c.name}`,
-                }))}
+                options={categories.map((c) => {
+                  const bracket = bracketById.get(c.bracketId);
+                  const suffix = bracket && bracket.kind !== "spend" ? ` · ${bracket.name}` : "";
+                  return { value: String(c.id), label: `${c.icon} ${c.name}${suffix}` };
+                })}
               />
 
               <div className="chip-row">

@@ -1,107 +1,79 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Category, type Recurring, type Frequency, updateSettings, type Settings as SettingsType, ensureIncomeCategoriesSeeded } from '../db/db';
-import { X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { db, type Category, type Bracket, type BracketKind, type Recurring, type Frequency, updateSettings, type Settings as SettingsType, ensureIncomeCategoriesSeeded } from '../db/db';
+import { X, ChevronRight, Plus } from 'lucide-react';
 import Dropdown from '../components/Dropdown';
 import {
-  exportFullBackup, exportTransactionsCSV, exportCategoriesCSV, exportMonthlySummaryCSV,
+  exportFullBackup, exportTransactionsCSV, exportCategoriesCSV, exportBracketsCSV, exportMonthlySummaryCSV,
   exportMLDatasetJSON, importFullBackup, downloadFile,
 } from '../lib/csv';
-import { todayISO } from '../lib/format';
+import { todayISO, iconBadgeStyle } from '../lib/format';
 import { useUIStore } from '../store/useUIStore';
 import IconPicker from '../components/IconPicker';
 
 const PALETTE = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#F0A83E', '#FF6B6B', '#6FC98A'];
+const KIND_LABEL: Record<BracketKind, string> = { spend: 'Budget cap', allocation: 'Allocation', income: 'Income' };
 
 export default function Settings({ settings, onSettingsChange }: { settings: SettingsType; onSettingsChange: (s: SettingsType) => void }) {
+  const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
   const recurring = useLiveQuery(() => db.recurring.toArray(), []) ?? [];
-  const expenseCategories = categories.filter((c) => c.type !== 'income' && !c.archived);
-  const incomeCategories = categories.filter((c) => c.type === 'income' && !c.archived);
+  const bracketById = new Map(brackets.map((b) => [b.id, b]));
+  const activeBrackets = brackets.filter((b) => !b.archived);
+  const archivedBrackets = brackets.filter((b) => b.archived);
   const archivedCategories = categories.filter((c) => c.archived);
-
-  const [draftCats, setDraftCats] = useState<Category[]>([]);
-  useEffect(() => setDraftCats(expenseCategories), [categories.length, JSON.stringify(expenseCategories.map((c) => c.id))]);
-
-  function updateCat(i: number, field: keyof Category, val: string | number) {
-    setDraftCats((prev) => prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)));
+  const categoryCountByBracket = new Map<number, number>();
+  for (const c of categories) {
+    if (c.archived) continue;
+    categoryCountByBracket.set(c.bracketId, (categoryCountByBracket.get(c.bracketId) ?? 0) + 1);
   }
-  function addCat() {
-    setDraftCats((prev) => [...prev, { name: '', icon: '＊', color: PALETTE[prev.length % PALETTE.length], budget: 0, type: 'expense' }]);
+
+  // Adding a bracket is the only thing Settings does directly — everything
+  // else (adding/editing categories within a bracket, renaming a bracket)
+  // happens on that bracket's own page, reached by tapping its row below.
+  // One reusable page instead of duplicating category-editing UI per kind.
+  const [showAddBracket, setShowAddBracket] = useState(false);
+  const [newBracketName, setNewBracketName] = useState('');
+  const [newBracketIcon, setNewBracketIcon] = useState('＊');
+  const [newBracketColor, setNewBracketColor] = useState(PALETTE[0]);
+  const [newBracketKind, setNewBracketKind] = useState<BracketKind>('spend');
+
+  async function addBracket() {
+    if (!newBracketName.trim()) { showToast('Give the bracket a name.'); return; }
+    const id = await db.brackets.add({
+      name: newBracketName.trim(),
+      icon: newBracketIcon,
+      color: newBracketColor,
+      kind: newBracketKind,
+    });
+    setNewBracketName('');
+    setNewBracketIcon('＊');
+    setNewBracketColor(PALETTE[0]);
+    setNewBracketKind('spend');
+    setShowAddBracket(false);
+    showToast(`"${newBracketName.trim()}" bracket added.`);
+    navigate('/bracket/' + id);
   }
+
   // Deleting a category outright silently orphans any transaction that
   // pointed at it — they'd just fall back to showing as "Uncategorized"
   // everywhere with no warning, and quietly drop out of that category's
-  // historical totals in Analytics. For a category with real history,
-  // archiving (hide it going forward, keep everything already attached to
-  // it exactly as-is) is almost always what's actually wanted instead — so
-  // offer that as the default path rather than losing the association by
-  // surprise.
-  async function deleteOrArchiveCategory(cat: Category): Promise<'deleted' | 'archived' | 'cancelled'> {
-    if (!cat.id) return 'cancelled'; // an unsaved draft row — nothing in the DB to touch
-    const count = await db.transactions.where('categoryId').equals(cat.id).count();
-    if (count > 0) {
-      const wantsDelete = confirm(
-        `"${cat.name || 'This category'}" has ${count} transaction${count === 1 ? '' : 's'}. Deleting it permanently will show ${count === 1 ? 'that one' : 'those'} as "Uncategorized" and drop ${count === 1 ? 'it' : 'them'} out of this category's history in Analytics.\n\nPress OK to delete anyway, or Cancel to archive it instead — hides it from new transactions while keeping your existing history exactly as it is.`,
-      );
-      if (!wantsDelete) {
-        const wantsArchive = confirm(
-          `Archive "${cat.name || 'this category'}"? It'll disappear from new transactions but your existing history stays untouched. You can restore it later from Settings.`,
-        );
-        if (!wantsArchive) return 'cancelled';
-        await db.categories.update(cat.id, { archived: true });
-        showToast(`Archived "${cat.name || 'category'}".`);
-        return 'archived';
-      }
-    }
-    await db.categories.delete(cat.id);
-    showToast(count > 0 ? `Deleted "${cat.name || 'category'}" — its ${count} transaction${count === 1 ? '' : 's'} are now Uncategorized.` : `Deleted "${cat.name || 'category'}".`);
-    return 'deleted';
-  }
+  // historical totals in Analytics. Archiving is offered as the default
+  // path instead when a category has real history. (Live on BracketDetail
+  // for active categories; this is only reached for the Archived list here.)
   async function restoreCategory(cat: Category) {
     if (!cat.id) return;
     await db.categories.update(cat.id, { archived: false });
     showToast(`Restored "${cat.name}".`);
   }
-  async function removeCat(i: number) {
-    const cat = draftCats[i];
-    const result = await deleteOrArchiveCategory(cat);
-    if (result === 'cancelled') return;
-    setDraftCats((prev) => prev.filter((_, idx) => idx !== i));
-  }
-  async function saveCats() {
-    for (const c of draftCats) {
-      if (!c.name.trim()) continue;
-      if (c.id) await db.categories.update(c.id, { name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color, type: 'expense' });
-      else await db.categories.add({ name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color, type: 'expense' });
-    }
-    showToast('Budgets saved.');
-  }
 
-  // Income categories — separate from expense budgets entirely; no budget field applies here.
-  const [draftIncomeCats, setDraftIncomeCats] = useState<Category[]>([]);
-  useEffect(() => setDraftIncomeCats(incomeCategories), [categories.length, JSON.stringify(incomeCategories.map((c) => c.id))]);
-
-  function updateIncomeCat(i: number, field: keyof Category, val: string | number) {
-    setDraftIncomeCats((prev) => prev.map((c, idx) => (idx === i ? { ...c, [field]: val } : c)));
-  }
-  function addIncomeCat() {
-    setDraftIncomeCats((prev) => [...prev, { name: '', icon: '💰', color: PALETTE[prev.length % PALETTE.length], budget: 0, type: 'income' }]);
-  }
-  async function removeIncomeCat(i: number) {
-    const cat = draftIncomeCats[i];
-    const result = await deleteOrArchiveCategory(cat);
-    if (result === 'cancelled') return;
-    setDraftIncomeCats((prev) => prev.filter((_, idx) => idx !== i));
-  }
-  async function saveIncomeCats() {
-    for (const c of draftIncomeCats) {
-      if (!c.name.trim()) continue;
-      if (c.id) await db.categories.update(c.id, { name: c.name.trim(), icon: c.icon, color: c.color, type: 'income' });
-      else await db.categories.add({ name: c.name.trim(), budget: 0, icon: c.icon, color: c.color, type: 'income' });
-    }
-    showToast('Income sources saved.');
+  async function restoreBracket(bracket: Bracket) {
+    if (!bracket.id) return;
+    await db.brackets.update(bracket.id, { archived: false });
+    showToast(`Restored "${bracket.name}".`);
   }
 
   // Recurring
@@ -160,6 +132,9 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   async function doExportCategoriesCSV() {
     downloadFile(`pfos-categories-${todayISO()}.csv`, await exportCategoriesCSV(), 'text/csv');
   }
+  async function doExportBracketsCSV() {
+    downloadFile(`pfos-brackets-${todayISO()}.csv`, await exportBracketsCSV(), 'text/csv');
+  }
   async function doExportMonthlySummaryCSV() {
     downloadFile(`pfos-monthly-summary-${todayISO()}.csv`, await exportMonthlySummaryCSV(), 'text/csv');
   }
@@ -186,7 +161,8 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   }
   async function wipeAll() {
     if (!confirm("This deletes every category, transaction, and recurring item on this device. This can't be undone. Continue?")) return;
-    await db.transaction('rw', db.categories, db.transactions, db.recurring, db.settings, async () => {
+    await db.transaction('rw', db.brackets, db.categories, db.transactions, db.recurring, db.settings, async () => {
+      await db.brackets.clear();
       await db.categories.clear();
       await db.transactions.clear();
       await db.recurring.clear();
@@ -203,52 +179,81 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
       </header>
       <div className="content">
         <div className="card">
-          <h2>Categories &amp; budgets</h2>
-          {draftCats.map((c, i) => (
-            <div className="cat-edit-row" key={c.id ?? 'new-' + i}>
-              <IconPicker
-                icon={c.icon}
-                color={c.color}
-                palette={PALETTE}
-                onIconChange={(icon) => updateCat(i, 'icon', icon)}
-                onColorChange={(color) => updateCat(i, 'color', color)}
-              />
-              <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, 'name', e.target.value)} />
-              <input type="number" placeholder="Budget" value={c.budget} onChange={(e) => updateCat(i, 'budget', e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
-              <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}><X size={15} /></button>
+          <h2>Brackets</h2>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            The top level: Expenditure, Savings, Investments, Income, or anything else you add. Tap a bracket to
+            manage its categories (Rent/Food under Expenditure, Portfolio/Gold under Investments, etc.) — sub-dividing
+            is entirely optional per bracket.
+          </p>
+          {activeBrackets.length === 0 ? (
+            <p className="muted" style={{ marginBottom: 12 }}>None yet. Add one below.</p>
+          ) : (
+            activeBrackets.map((b) => (
+              <div
+                key={b.id}
+                className="tx-link"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                onClick={() => navigate('/bracket/' + b.id)}
+              >
+                <div className="tx-left">
+                  <div className="tx-icon" style={iconBadgeStyle(b.color)}>{b.icon}</div>
+                  <div className="tx-meta">
+                    <div className="tx-cat">{b.name}</div>
+                    <div className="tx-note">
+                      {KIND_LABEL[b.kind]} · {categoryCountByBracket.get(b.id!) ?? 0} categor
+                      {(categoryCountByBracket.get(b.id!) ?? 0) === 1 ? 'y' : 'ies'}
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight size={18} style={{ color: 'var(--ink-faint)', flexShrink: 0 }} />
+              </div>
+            ))
+          )}
+
+          {showAddBracket ? (
+            <div style={{ marginTop: 12 }}>
+              <div className="cat-edit-row" style={{ borderBottom: 'none' }}>
+                <IconPicker
+                  icon={newBracketIcon}
+                  color={newBracketColor}
+                  palette={PALETTE}
+                  onIconChange={setNewBracketIcon}
+                  onColorChange={setNewBracketColor}
+                />
+                <input type="text" placeholder="Bracket name (e.g. EMI)" value={newBracketName} onChange={(e) => setNewBracketName(e.target.value)} style={{ flex: 1 }} />
+              </div>
+              <label>Behaves like</label>
+              <div className="chip-row">
+                <button className={'chip' + (newBracketKind === 'spend' ? ' active' : '')} onClick={() => setNewBracketKind('spend')}>Budget cap</button>
+                <button className={'chip' + (newBracketKind === 'allocation' ? ' active' : '')} onClick={() => setNewBracketKind('allocation')}>Allocation</button>
+                <button className={'chip' + (newBracketKind === 'income' ? ' active' : '')} onClick={() => setNewBracketKind('income')}>Income</button>
+              </div>
+              <button className="btn" onClick={addBracket}>Create bracket</button>
+              <button className="btn ghost" onClick={() => setShowAddBracket(false)}>Cancel</button>
             </div>
-          ))}
-          <button className="btn secondary" onClick={addCat}>+ Add category</button>
-          <button className="btn" onClick={saveCats}>Save changes</button>
+          ) : (
+            <button className="btn secondary" onClick={() => setShowAddBracket(true)} style={{ marginTop: 8 }}>
+              <Plus size={15} style={{ verticalAlign: -2, marginRight: 4 }} />
+              Add bracket
+            </button>
+          )}
         </div>
 
-        <div className="card">
-          <h2>Income sources</h2>
-          <p className="muted" style={{ marginBottom: 12 }}>
-            Separate from your spending categories above — no budget applies here, these just label where money
-            comes from (salary, freelance work, etc.) when you log it as income.
-          </p>
-          {draftIncomeCats.length === 0 && (
+        {archivedBrackets.length > 0 && (
+          <div className="card">
+            <h2>Archived brackets</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
-              None yet. Add one below, or set a monthly income in Preferences to add the common ones automatically.
+              Hidden from Home, Settings, and new transactions — everything inside is untouched. Restore one to
+              use it again.
             </p>
-          )}
-          {draftIncomeCats.map((c, i) => (
-            <div className="cat-edit-row" key={c.id ?? 'new-income-' + i}>
-              <IconPicker
-                icon={c.icon}
-                color={c.color}
-                palette={PALETTE}
-                onIconChange={(icon) => updateIncomeCat(i, 'icon', icon)}
-                onColorChange={(color) => updateIncomeCat(i, 'color', color)}
-              />
-              <input type="text" placeholder="Source (e.g. Salary)" value={c.name} onChange={(e) => updateIncomeCat(i, 'name', e.target.value)} style={{ flex: 1 }} />
-              <button className="icon-btn danger" aria-label="Remove" onClick={() => removeIncomeCat(i)}><X size={15} /></button>
-            </div>
-          ))}
-          <button className="btn secondary" onClick={addIncomeCat}>+ Add income source</button>
-          <button className="btn" onClick={saveIncomeCats}>Save changes</button>
-        </div>
+            {archivedBrackets.map((b) => (
+              <div key={b.id} className="tx-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{b.icon} {b.name}</span>
+                <button className="btn small secondary" onClick={() => restoreBracket(b)}>Restore</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {archivedCategories.length > 0 && (
           <div className="card">
@@ -259,10 +264,13 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
             {archivedCategories.map((c) => (
               <div className="tx" key={c.id}>
                 <div className="tx-left">
-                  <div className="tx-icon" style={{ background: (c.color || '#888') + '26', color: c.color }}>{c.icon}</div>
+                  <div className="tx-icon" style={iconBadgeStyle(c.color)}>{c.icon}</div>
                   <div className="tx-meta">
                     <div className="tx-cat">{c.name}</div>
-                    <div className="tx-note">{c.type === 'income' ? 'Income source' : 'Expense category'}</div>
+                    <div className="tx-note">{(() => {
+                      const kind = bracketById.get(c.bracketId)?.kind;
+                      return kind ? KIND_LABEL[kind] : 'Category';
+                    })()}</div>
                   </div>
                 </div>
                 <div className="tx-right">
@@ -283,7 +291,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
               return (
                 <div className="tx" key={r.id}>
                   <div className="tx-left">
-                    <div className="tx-icon" style={{ background: (c?.color || '#888') + '26', color: c?.color }}>{c?.icon || '＊'}</div>
+                    <div className="tx-icon" style={iconBadgeStyle(c?.color)}>{c?.icon || '＊'}</div>
                     <div className="tx-meta">
                       <div className="tx-cat">{r.name}</div>
                       <div className="tx-note">{r.frequency} · next {r.nextDate}{r.paused ? ' · paused' : ''}</div>
@@ -297,12 +305,12 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
               );
             })
           )}
-          <label>Name</label>
-          <input type="text" placeholder="e.g. Rent, Netflix, Salary" value={rName} onChange={(e) => setRName(e.target.value)} />
+          <label htmlFor="recurring-name">Name</label>
+          <input id="recurring-name" type="text" placeholder="e.g. Rent, Netflix, Salary" value={rName} onChange={(e) => setRName(e.target.value)} />
           <div className="row2">
             <div>
-              <label>Amount</label>
-              <input type="number" value={rAmount} onChange={(e) => setRAmount(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
+              <label htmlFor="recurring-amount">Amount</label>
+              <input id="recurring-amount" type="number" value={rAmount} onChange={(e) => setRAmount(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
             </div>
             <div>
               <label>Frequency</label>
@@ -325,7 +333,12 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
                 value={rCat != null ? String(rCat) : ''}
                 onChange={(v) => setRCat(Number(v))}
                 placeholder="Select…"
-                options={categories.map((c) => ({ value: String(c.id), label: `${c.icon} ${c.name}` }))}
+                options={categories
+                  .filter((c) => !c.archived && !bracketById.get(c.bracketId)?.archived)
+                  .map((c) => {
+                    const bracket = bracketById.get(c.bracketId);
+                    return { value: String(c.id), label: `${c.icon} ${c.name}${bracket ? ` · ${bracket.name}` : ''}` };
+                  })}
               />
             </div>
             <div>
@@ -371,8 +384,8 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <input id="monthly-income" type="number" inputMode="decimal" placeholder="0.00" value={incomeDraft} onChange={(e) => setIncomeDraft(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
           <p className="muted" style={{ marginTop: 8 }}>
             {Number(incomeDraft) > 0
-              ? 'The dashboard tracks income vs. spend and shows savings. Your fixed income counts automatically each month — you don\u2019t need to log it as a transaction.'
-              : 'Left at 0, the dashboard shows only your category budgets — no income or savings tracking. Set an amount if you want savings tracked alongside your spending.'}
+              ? 'Home shows this against your spending, allocations, and what\u2019s left unallocated. Your fixed income counts automatically each month — you don\u2019t need to log it as a transaction.'
+              : 'Left at 0, Home simplifies down to just your Budget total — no income or allocation tracking. Set an amount if you want the fuller picture on Home.'}
           </p>
           <button className="btn secondary" onClick={saveIncome}>Save income</button>
         </div>
@@ -391,6 +404,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <p className="muted">Built for Power BI, Excel, or a Python/pandas notebook — every export is a clean flat table with precomputed date fields (weekday, week, quarter, year), so no reshaping is needed before you build a report or train a model.</p>
           <button className="btn secondary" onClick={doExportCSV}>Transactions (.csv — fact table)</button>
           <button className="btn secondary" onClick={doExportCategoriesCSV}>Categories (.csv — dimension table)</button>
+          <button className="btn secondary" onClick={doExportBracketsCSV}>Brackets (.csv — dimension table)</button>
           <button className="btn secondary" onClick={doExportMonthlySummaryCSV}>Monthly budget vs. actual (.csv)</button>
           <button className="btn secondary" onClick={doExportMLDataset}>Full ML dataset (.json — all tables bundled)</button>
           <p className="muted" style={{ marginTop: 12 }}>
@@ -400,7 +414,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
 
         <div className="card">
           <h2>About</h2>
-          <p className="muted">Personal Finance OS — zero login, zero ads, zero subscription, zero analytics, zero tracking. Installable to your home screen and fully usable offline.</p>
+          <p className="muted">Money Mate — zero login, zero ads, zero subscription.</p>
         </div>
       </div>
     </>

@@ -10,55 +10,58 @@ import {
   shortDate,
   daysInMonth,
   dayOfMonthProgress,
+  iconBadgeStyle,
 } from "../lib/format";
 import CategoryRow from "../components/CategoryRow";
 import { syncWidget } from "../lib/widgetBridge";
 import { Wallet, Receipt } from "lucide-react";
 
+// The Budget screen — capped spending categories only (Rent, Food,
+// Transport…), aggregated across every 'spend'-kind bracket (usually just
+// Expenditure, but not assumed to be the only one). Deliberately knows
+// nothing about income, savings, or investments; that picture lives on
+// Home ("/"), which is where you land after onboarding and where "money
+// you haven't given a job to" is front and center. See db.ts BracketKind
+// for the full model.
 export default function Dashboard({
   currency,
-  monthlyIncome,
   hideWidgetAmounts,
 }: {
   currency: string;
-  monthlyIncome: number;
   hideWidgetAmounts?: boolean;
 }) {
   const navigate = useNavigate();
   const curMonth = monthKey(todayISO());
 
+  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
+  const spendBracketIds = new Set(brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id));
+  // Allocation exclusion intentionally isn't archived-filtered — an
+  // archived Savings bracket's transactions still shouldn't get swept into
+  // "Spent" against the budget cap just because the bracket is hidden.
+  const allocationBracketIds = new Set(brackets.filter((b) => b.kind === "allocation").map((b) => b.id));
   const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const categories = allCats.filter((c) => !c.archived && c.type !== "income");
+  const categories = allCats.filter((c) => !c.archived && spendBracketIds.has(c.bracketId));
+  const allocationCategoryIds = new Set(
+    allCats.filter((c) => allocationBracketIds.has(c.bracketId)).map((c) => c.id),
+  );
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
 
   const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
-  const spentTx = monthTx.filter((t) => t.type === "expense");
-  const incomeTx = monthTx.filter((t) => t.type === "income");
+  // Excludes transactions logged against allocation categories (e.g. an
+  // expense-type entry moving money into Savings) — those aren't spend
+  // against the budget cap. Uncategorized/orphaned transactions are still
+  // counted here (treated as unbudgeted spend, same as before).
+  const spentTx = monthTx.filter(
+    (t) => t.type === "expense" && !allocationCategoryIds.has(t.categoryId),
+  );
 
-  const totalBudget = allCats
-    .filter((c) => c.type !== "income")
-    .reduce((s, c) => s + c.budget, 0);
+  const totalBudget = categories.reduce((s, c) => s + c.budget, 0);
   const totalSpent = spentTx.reduce((s, t) => s + t.amount, 0);
-  // Fixed salary counts automatically every month without needing to be logged as
-  // a transaction; anything logged as income (bonus, freelance) adds on top of it.
-  const loggedIncome = incomeTx.reduce((s, t) => s + t.amount, 0);
-  const totalIncome = monthlyIncome + loggedIncome;
-  const trackIncome = monthlyIncome > 0;
-  // "Remaining" must tally with whatever figure it's shown beside in the top row:
-  // Income − Spent when income tracking is on, Budget − Spent when it's off. It was
-  // previously always budget-based even when displayed next to Income, which meant
-  // the two numbers had no arithmetic relationship to each other at all.
-  const remaining = trackIncome
-    ? totalIncome - totalSpent
-    : totalBudget - totalSpent;
-  const budgetRemaining = totalBudget - totalSpent;
-  const savings = totalIncome - totalSpent;
-  const savingsPct = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
+  const remaining = totalBudget - totalSpent;
 
   const elapsed = dayOfMonthProgress(curMonth);
   const totalDays = daysInMonth(curMonth);
   const dailyAvg = elapsed > 0 ? totalSpent / elapsed : 0;
-  //  const projected = dailyAvg * totalDays;
 
   const today = todayISO();
   const todaySpend = spentTx
@@ -107,7 +110,7 @@ export default function Dashboard({
     syncWidget({
       spent: totalSpent,
       budget: totalBudget,
-      remaining: budgetRemaining,
+      remaining,
       currency,
       monthLabel: monthLabel(curMonth),
       hideAmounts: !!hideWidgetAmounts,
@@ -120,7 +123,7 @@ export default function Dashboard({
   }, [
     totalSpent,
     totalBudget,
-    budgetRemaining,
+    remaining,
     currency,
     curMonth,
     hideWidgetAmounts,
@@ -131,22 +134,15 @@ export default function Dashboard({
     <>
       <header className="topbar">
         <div className="eyebrow">Money Mate</div>
-        <h1>Dashboard</h1>
+        <h1>Budget</h1>
         <div className="sub">{monthLabel(curMonth)}</div>
       </header>
       <div className="content">
         <div className="grid-3">
-          {trackIncome ? (
-            <div>
-              <div className="label">Income</div>
-              <div className="value">{fmtMoney(totalIncome, currency)}</div>
-            </div>
-          ) : (
-            <div>
-              <div className="label">Budgeted</div>
-              <div className="value">{fmtMoney(totalBudget, currency)}</div>
-            </div>
-          )}
+          <div>
+            <div className="label">Budgeted</div>
+            <div className="value">{fmtMoney(totalBudget, currency)}</div>
+          </div>
           <div>
             <div className="label">Spent</div>
             <div className="value">{fmtMoney(totalSpent, currency)}</div>
@@ -168,9 +164,6 @@ export default function Dashboard({
               <div className="lbl">
                 of {fmtMoney(totalBudget, currency)} budget used
               </div>
-              {/* <div className="lbl" style={{ marginTop: 6 }}>
-                Projected month-end spend: <b style={{ color: 'var(--ink)' }}>{fmtMoney(projected, currency)}</b>
-              </div> */}
             </div>
           </div>
         </div>
@@ -190,7 +183,7 @@ export default function Dashboard({
               <div className="glyph">
                 <Wallet size={30} strokeWidth={1.5} />
               </div>
-              No categories yet — add one in Settings.
+              No budget categories yet — add one in Settings.
             </div>
           ) : (
             (categories ?? []).map((c) => {
@@ -219,21 +212,10 @@ export default function Dashboard({
             <div className="label">Daily avg</div>
             <div className="value">{fmtMoney(dailyAvg, currency)}</div>
           </div>
-          {trackIncome ? (
-            <div className={savings >= 0 ? "pos" : "neg"}>
-              <div className="label">Savings</div>
-              <div className="value">
-                {savingsPct
-                  ? savingsPct.toFixed(0) + "%"
-                  : fmtMoney(savings, currency)}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div className="label">Days left</div>
-              <div className="value">{Math.max(0, totalDays - elapsed)}</div>
-            </div>
-          )}
+          <div>
+            <div className="label">Days left</div>
+            <div className="value">{Math.max(0, totalDays - elapsed)}</div>
+          </div>
         </div>
 
         <div className="card">
@@ -265,10 +247,7 @@ export default function Dashboard({
                   <div className="tx-left">
                     <div
                       className="tx-icon"
-                      style={{
-                        background: (c?.color || "#888") + "26",
-                        color: c?.color,
-                      }}
+                      style={iconBadgeStyle(c?.color)}
                     >
                       {c?.icon || "＊"}
                     </div>
