@@ -156,7 +156,7 @@ export default function Overview({
               return (
                 <div
                   key={b.id}
-                  className="tx-link"
+                  className="tx tx-link"
                   style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
                   onClick={() => navigate("/bracket/" + b.id)}
                 >
@@ -196,7 +196,7 @@ export default function Overview({
             </div>
           ) : (
             <div
-              className="tx-link"
+              className="tx tx-link"
               style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }}
               onClick={() => navigate("/history")}
             >

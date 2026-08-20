@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db, type Category } from "../db/db";
 import { fmtMoney, monthKey, monthLabel, todayISO } from "../lib/format";
+import { computeGeneralAdjustment } from "../lib/budgetLogic";
 import IconPicker from "../components/IconPicker";
 import { X, Wallet } from "lucide-react";
 import { useUIStore } from "../store/useUIStore";
@@ -70,8 +71,16 @@ export default function BracketDetail({
   const [draftCats, setDraftCats] = useState<Category[]>([]);
   useEffect(() => {
     setDraftCats(activeCategories);
+    // Deliberately keyed on the categories' actual field values (not just
+    // which ids exist) — a save that only changes an existing category's
+    // budget (e.g. General shrinking after adding Food) doesn't add or
+    // remove any id, so an id-only dependency would never notice the DB
+    // actually changed underneath. Without this, the form and the live
+    // preview banner kept showing what was last typed instead of the
+    // freshly-saved truth, until something else (like navigating away and
+    // back) forced a full remount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bracketId, categories.length, JSON.stringify(activeCategories.map((c) => c.id))]);
+  }, [bracketId, JSON.stringify(activeCategories.map((c) => [c.id, c.name, c.budget, c.icon, c.color]))]);
 
   const [bracketName, setBracketName] = useState("");
   const [bracketIcon, setBracketIcon] = useState("");
@@ -122,13 +131,41 @@ export default function BracketDetail({
     showToast(`Restored "${cat.name}".`);
   }
   async function saveCats() {
-    for (const c of draftCats) {
+    const adjustment = computeGeneralAdjustment(activeCategories, draftCats);
+    const toSave = adjustment
+      ? draftCats.map((c) => (c.id === adjustment.generalId ? { ...c, budget: adjustment.newBudget } : c))
+      : draftCats;
+
+    for (const c of toSave) {
       if (!c.name.trim()) continue;
       const payload = { name: c.name.trim(), budget: Number(c.budget) || 0, icon: c.icon, color: c.color, bracketId };
       if (c.id) await db.categories.update(c.id, payload);
       else await db.categories.add(payload);
     }
-    showToast("Saved.");
+
+    // General fully absorbed into real categories now — archive the dead
+    // 0-budget row rather than leaving it cluttering the list. Restorable
+    // from Settings later if a fresh catch-all is ever wanted again.
+    if (adjustment && adjustment.newBudget === 0) {
+      await db.categories.update(adjustment.generalId, { archived: true });
+    }
+
+    let message = "Saved.";
+    if (adjustment) {
+      const shortfall = Math.max(0, adjustment.newlyAddedBudget - adjustment.oldBudget);
+      const covered = adjustment.newlyAddedBudget - shortfall;
+      if (shortfall === 0) {
+        message =
+          adjustment.newBudget === 0
+            ? `Saved — General fully covered the ${fmtMoney(covered, currency)} added and is now archived.`
+            : `Saved — General shrank by ${fmtMoney(covered, currency)} to cover it.`;
+      } else {
+        // General didn't have enough left to absorb all of it — it's now
+        // archived (drained to 0) and the rest genuinely raised the total.
+        message = `Saved — General covered ${fmtMoney(covered, currency)} and is now archived; the rest (${fmtMoney(shortfall, currency)}) increased the total.`;
+      }
+    }
+    showToast(message);
   }
   async function saveBracket() {
     if (!bracket?.id || !bracketName.trim()) return;
@@ -238,8 +275,15 @@ export default function BracketDetail({
         <div className="card">
           <h2>Categories</h2>
           {bracket.kind !== "income" && draftCats.length > 0 && (() => {
-            const draftBudgetTotal = draftCats.reduce((s, c) => s + (Number(c.budget) || 0), 0);
-            const delta = draftBudgetTotal - totalTarget;
+            const rawDraftTotal = draftCats.reduce((s, c) => s + (Number(c.budget) || 0), 0);
+            const adjustment = computeGeneralAdjustment(activeCategories, draftCats);
+            // What the total will actually settle to after Save, once
+            // General's automatic shrink (if any) is accounted for — not
+            // the raw sum of what's on screen right now, which would look
+            // inflated for a moment even when General is about to quietly
+            // absorb the difference.
+            const previewTotal = adjustment ? rawDraftTotal - (adjustment.oldBudget - adjustment.newBudget) : rawDraftTotal;
+            const delta = previewTotal - totalTarget;
             return (
               <div
                 className="muted"
@@ -254,8 +298,14 @@ export default function BracketDetail({
               >
                 New {amountLabel.toLowerCase()} total:{" "}
                 <b style={{ color: "var(--ink)", fontFamily: "var(--mono)" }}>
-                  {fmtMoney(draftBudgetTotal, currency)}
+                  {fmtMoney(previewTotal, currency)}
                 </b>
+                {delta === 0 && adjustment && (
+                  <>
+                    {" — "}General will shrink to {fmtMoney(adjustment.newBudget, currency)} to cover this, so the
+                    total stays the same.
+                  </>
+                )}
                 {delta !== 0 && (
                   <>
                     {" "}
@@ -263,7 +313,14 @@ export default function BracketDetail({
                       ({delta > 0 ? "+" : ""}
                       {fmtMoney(delta, currency)} vs current {fmtMoney(totalTarget, currency)})
                     </span>
-                    {delta > 0 && (
+                    {delta > 0 && adjustment && (
+                      <>
+                        {" — "}
+                        General only had {fmtMoney(adjustment.oldBudget, currency)} left to cover it, so the rest
+                        raises the total.
+                      </>
+                    )}
+                    {delta > 0 && !adjustment && (
                       <>
                         {" — "}
                         adding a category adds to the total; reduce another category's{" "}
@@ -319,7 +376,7 @@ export default function BracketDetail({
           <div className="card">
             <h2>Archived</h2>
             {archivedCategories.map((c) => (
-              <div key={c.id} className="tx-link" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div key={c.id} className="tx tx-link" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>{c.icon} {c.name}</span>
                 <button className="btn small secondary" onClick={() => restoreCat(c)}>Restore</button>
               </div>

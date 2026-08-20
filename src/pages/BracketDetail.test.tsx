@@ -101,3 +101,147 @@ describe('BracketDetail — archive/delete a bracket', () => {
     expect(tx[0].categoryId).toBe(catId);
   });
 });
+
+describe('BracketDetail — draftCats stays in sync with the DB, not just the id set', () => {
+  it('the "New budget total" preview updates immediately after Save — not just after leaving and returning to the page', async () => {
+    // Regression guard: draftCats used to only re-sync when the SET of
+    // category ids changed (add/remove), so a save that only changed an
+    // EXISTING category's budget (General shrinking, exactly what happens
+    // here) left the form and this banner showing stale numbers until
+    // something else forced a full remount.
+    const id = await makeBracket('Expenditure', 'spend');
+    await db.categories.add({ name: 'General', icon: '💳', color: '#7C93F0', budget: 23000, bracketId: id });
+    await db.categories.add({ name: 'Food', icon: '🍔', color: '#F0B94D', budget: 0, bracketId: id });
+    const user = userEvent.setup();
+    renderBracket(id);
+
+    const budgetInputs = await screen.findAllByPlaceholderText('Budget');
+    const foodBudgetInput = budgetInputs[budgetInputs.length - 1];
+    await user.clear(foodBudgetInput);
+    await user.type(foodBudgetInput, '9000');
+    await user.click(screen.getByText('Save changes'));
+
+    // No unmount/remount here — same component instance, same as staying
+    // on the page. The top tile ("Budgeted") should read 23000 (unchanged
+    // total) and the preview banner should no longer show the old "+9000"
+    // mismatch, purely from the live query + effect re-syncing on their own.
+    await waitFor(() => {
+      const budgetedValue = screen.getByText('Budgeted').closest('div')?.parentElement?.querySelector('.value');
+      expect(budgetedValue?.textContent).toBe('₹23,000');
+    });
+    // The live query updating (above) and draftCats re-syncing to match it
+    // are two separate render passes (the effect fires a render after the
+    // one where activeCategories first reflects the new totals) — wait for
+    // this one too rather than asserting it's already settled.
+    await waitFor(() => {
+      expect(screen.queryByText(/vs current ₹23,000\)/)).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('BracketDetail — General auto-shrinks when a real category is added', () => {
+  it('filling in an EXISTING ₹0 starter category (e.g. onboarding\'s pre-seeded "Food") shrinks General too, not just a brand-new row', async () => {
+    // This is the exact real-world case that was broken: Expenditure's
+    // onboarding fallback seeds Rent/Food/etc. at ₹0 alongside General.
+    // Typing a budget into one of them isn't "adding a category" via the
+    // + button — it's editing an existing row — but it must still draw
+    // from General the same way a brand-new category would.
+    const id = await makeBracket('Expenditure', 'spend');
+    await db.categories.add({ name: 'General', icon: '💳', color: '#7C93F0', budget: 23000, bracketId: id });
+    await db.categories.add({ name: 'Food', icon: '🍔', color: '#F0B94D', budget: 0, bracketId: id });
+    const user = userEvent.setup();
+    renderBracket(id);
+
+    const budgetInputs = await screen.findAllByPlaceholderText('Budget');
+    const foodBudgetInput = budgetInputs[budgetInputs.length - 1]; // Food, added second
+    await user.clear(foodBudgetInput);
+    await user.type(foodBudgetInput, '9000');
+
+    await user.click(screen.getByText('Save changes'));
+
+    await waitFor(async () => {
+      const cats = await db.categories.where('bracketId').equals(id).toArray();
+      const food = cats.find((c) => c.name === 'Food');
+      const gen = cats.find((c) => c.name === 'General');
+      expect(food?.budget).toBe(9000);
+      expect(gen?.budget).toBe(14000);
+      expect(gen?.archived).toBeFalsy();
+      // Total unchanged at 23000 — not 32000.
+      expect(cats.filter((c) => !c.archived).reduce((s, c) => s + c.budget, 0)).toBe(23000);
+    });
+  });
+
+  it('adding "Rent" shrinks General by the same amount, keeping the bracket total unchanged', async () => {
+    const id = await makeBracket('Expenditure', 'spend');
+    await db.categories.add({ name: 'General', icon: '💳', color: '#7C93F0', budget: 23000, bracketId: id });
+    const user = userEvent.setup();
+    renderBracket(id);
+
+    await user.click(await screen.findByText('+ Add category'));
+    const nameInputs = await screen.findAllByPlaceholderText('Category');
+    const budgetInputs = screen.getAllByPlaceholderText('Budget');
+    await user.type(nameInputs[nameInputs.length - 1], 'Rent');
+    await user.type(budgetInputs[budgetInputs.length - 1], '5000');
+
+    await user.click(screen.getByText('Save changes'));
+
+    await waitFor(async () => {
+      const cats = await db.categories.where('bracketId').equals(id).toArray();
+      const rent = cats.find((c) => c.name === 'Rent');
+      const gen = cats.find((c) => c.name === 'General');
+      expect(rent?.budget).toBe(5000);
+      expect(gen?.budget).toBe(18000);
+      expect(gen?.archived).toBeFalsy();
+    });
+  });
+
+  it('draining General to exactly 0 archives it, so it drops out of the active category list', async () => {
+    const id = await makeBracket('Expenditure', 'spend');
+    await db.categories.add({ name: 'General', icon: '💳', color: '#7C93F0', budget: 5000, bracketId: id });
+    const user = userEvent.setup();
+    renderBracket(id);
+
+    await user.click(await screen.findByText('+ Add category'));
+    const nameInputs = await screen.findAllByPlaceholderText('Category');
+    const budgetInputs = screen.getAllByPlaceholderText('Budget');
+    await user.type(nameInputs[nameInputs.length - 1], 'Rent');
+    await user.type(budgetInputs[budgetInputs.length - 1], '5000');
+
+    await user.click(screen.getByText('Save changes'));
+
+    await waitFor(async () => {
+      const gen = await db.categories.where({ bracketId: id, name: 'General' }).first();
+      expect(gen?.budget).toBe(0);
+      expect(gen?.archived).toBe(true);
+    });
+    // Archived General should no longer show up in the editor at all.
+    expect(screen.queryByDisplayValue('General')).not.toBeInTheDocument();
+  });
+
+  it('adding more than General has left raises the total for the shortfall, rather than silently capping the new category', async () => {
+    const id = await makeBracket('Expenditure', 'spend');
+    await db.categories.add({ name: 'General', icon: '💳', color: '#7C93F0', budget: 3000, bracketId: id });
+    const user = userEvent.setup();
+    renderBracket(id);
+
+    await user.click(await screen.findByText('+ Add category'));
+    const nameInputs = await screen.findAllByPlaceholderText('Category');
+    const budgetInputs = screen.getAllByPlaceholderText('Budget');
+    await user.type(nameInputs[nameInputs.length - 1], 'Rent');
+    await user.type(budgetInputs[budgetInputs.length - 1], '5000');
+
+    await user.click(screen.getByText('Save changes'));
+
+    await waitFor(async () => {
+      const cats = await db.categories.where('bracketId').equals(id).toArray();
+      const rent = cats.find((c) => c.name === 'Rent');
+      const gen = cats.find((c) => c.name === 'General');
+      expect(rent?.budget).toBe(5000);
+      expect(gen?.budget).toBe(0);
+      expect(gen?.archived).toBe(true);
+      // Total is now 5000 (Rent only, General drained) — genuinely grew
+      // from the original 3000, since General couldn't cover all of it.
+      expect(cats.filter((c) => !c.archived).reduce((s, c) => s + c.budget, 0)).toBe(5000);
+    });
+  });
+});

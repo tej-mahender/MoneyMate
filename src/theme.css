@@ -398,6 +398,17 @@ textarea:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  /* Every label inside here is :first-child of its own column wrapper, so
+     the shared `label:first-child { margin-top: 0 }` rule always zeroes
+     its top margin — correct when a field is genuinely alone at the top of
+     a card, but here it left the whole row2 group with no separation from
+     whatever came before it (a previous field, or another row2), while
+     still keeping its normal 7px gap down to its own input. The label
+     ended up sitting flush against the *previous, unrelated* field instead
+     of clearly belonging to the one below it. This restores that
+     separation at the group level instead of relying on the label's own
+     margin, which doesn't fire here. */
+  margin-top: 15px;
 }
 
 .btn {

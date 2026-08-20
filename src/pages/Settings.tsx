@@ -191,7 +191,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
             activeBrackets.map((b) => (
               <div
                 key={b.id}
-                className="tx-link"
+                className="tx tx-link"
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                 onClick={() => navigate('/bracket/' + b.id)}
               >
@@ -247,7 +247,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
               use it again.
             </p>
             {archivedBrackets.map((b) => (
-              <div key={b.id} className="tx-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={b.id} className="tx tx-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>{b.icon} {b.name}</span>
                 <button className="btn small secondary" onClick={() => restoreBracket(b)}>Restore</button>
               </div>
@@ -414,7 +414,7 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
 
         <div className="card">
           <h2>About</h2>
-          <p className="muted">Money Mate — zero login, zero ads, zero subscription.</p>
+          <p className="muted">Personal Finance OS — zero login, zero ads, zero subscription, zero analytics, zero tracking. Installable to your home screen and fully usable offline.</p>
         </div>
       </div>
     </>
