@@ -22,7 +22,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     // shows a plain, friendly message so a normal user never has to look at
     // a stack trace (or anything it might incidentally contain, like a file
     // path) just because one screen hit a bug.
-    console.error("PFOS crashed:", error, info.componentStack);
+    console.error("Money Mate crashed:", error, info.componentStack);
   }
 
   // Clears the crash and re-renders the same tree in place — the right

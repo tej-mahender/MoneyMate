@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import Dashboard from '../pages/Dashboard';
-import Overview from '../pages/Overview';
-import { db, computeMonthSummary } from '../db/db';
-import { exportTransactionsCSV, exportFullBackup } from '../lib/csv';
+import { describe, it, expect, beforeEach } from "vitest";
+import { render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import Dashboard from "../pages/Dashboard";
+import Overview from "../pages/Overview";
+import { db, computeMonthSummary } from "../db/db";
+import { exportTransactionsCSV, exportFullBackup } from "../lib/csv";
 
 beforeEach(async () => {
   await db.transactions.clear();
@@ -19,15 +19,32 @@ beforeEach(async () => {
  *  who's used this app every day for a few years", the realistic ceiling
  *  for a single-user offline finance app rather than a synthetic worst case. */
 async function seedRealisticHistory(years: number, categoriesCount = 12) {
-  const spendBracketId = await db.brackets.add({ name: 'Expenditure', icon: '💳', color: '#7C93F0', kind: 'spend' });
-  const allocationBracketId = await db.brackets.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', kind: 'allocation' });
-  const bracketIds = [spendBracketId, spendBracketId, spendBracketId, spendBracketId, spendBracketId, allocationBracketId];
+  const spendBracketId = await db.brackets.add({
+    name: "Expenditure",
+    icon: "💳",
+    color: "#7C93F0",
+    kind: "spend",
+  });
+  const allocationBracketId = await db.brackets.add({
+    name: "Savings",
+    icon: "💰",
+    color: "#4FD9B8",
+    kind: "allocation",
+  });
+  const bracketIds = [
+    spendBracketId,
+    spendBracketId,
+    spendBracketId,
+    spendBracketId,
+    spendBracketId,
+    allocationBracketId,
+  ];
   const categoryIds: number[] = [];
   for (let i = 0; i < categoriesCount; i++) {
     const id = await db.categories.add({
       name: `Category ${i}`,
-      icon: '💳',
-      color: '#7C93F0',
+      icon: "💳",
+      color: "#7C93F0",
       budget: 5000,
       bracketId: bracketIds[i % bracketIds.length],
     });
@@ -36,13 +53,19 @@ async function seedRealisticHistory(years: number, categoriesCount = 12) {
 
   const days = years * 365;
   const today = new Date();
-  const rows: { type: 'expense'; amount: number; categoryId: number; date: string; createdAt: number }[] = [];
+  const rows: {
+    type: "expense";
+    amount: number;
+    categoryId: number;
+    date: string;
+    createdAt: number;
+  }[] = [];
   for (let d = 0; d < days; d++) {
     const date = new Date(today);
     date.setDate(date.getDate() - d);
     const iso = date.toISOString().slice(0, 10);
     rows.push({
-      type: 'expense',
+      type: "expense",
       amount: 50 + (d % 500),
       categoryId: categoryIds[d % categoryIds.length],
       date: iso,
@@ -53,8 +76,8 @@ async function seedRealisticHistory(years: number, categoriesCount = 12) {
   return { categoryIds, transactionCount: rows.length };
 }
 
-describe('performance — computeMonthSummary (used by widget sync)', () => {
-  it('stays fast (<150ms) against 3 years of daily transaction history', async () => {
+describe("performance — computeMonthSummary (Dashboard's Budgeted/Spent/Remaining)", () => {
+  it("stays fast (<150ms) against 3 years of daily transaction history", async () => {
     const { transactionCount } = await seedRealisticHistory(3);
     expect(transactionCount).toBeGreaterThan(1000);
 
@@ -71,7 +94,7 @@ describe('performance — computeMonthSummary (used by widget sync)', () => {
     expect(elapsed).toBeLessThan(150);
   });
 
-  it('cost does not scale with total history size (indexed month lookup, not a full-table scan)', async () => {
+  it("cost does not scale with total history size (indexed month lookup, not a full-table scan)", async () => {
     await seedRealisticHistory(1);
     const t1Start = performance.now();
     await computeMonthSummary();
@@ -92,8 +115,8 @@ describe('performance — computeMonthSummary (used by widget sync)', () => {
   });
 });
 
-describe('performance — Dashboard / Overview render against realistic history', () => {
-  it('Dashboard mounts in reasonable time with 3 years of history', async () => {
+describe("performance — Dashboard / Overview render against realistic history", () => {
+  it("Dashboard mounts in reasonable time with 3 years of history", async () => {
     await seedRealisticHistory(3);
     const start = performance.now();
     render(
@@ -107,7 +130,7 @@ describe('performance — Dashboard / Overview render against realistic history'
     expect(elapsed).toBeLessThan(3000);
   });
 
-  it('Overview mounts in reasonable time with 3 years of history', async () => {
+  it("Overview mounts in reasonable time with 3 years of history", async () => {
     await seedRealisticHistory(3);
     const start = performance.now();
     render(
@@ -127,7 +150,7 @@ describe('performance — Dashboard / Overview render against realistic history'
   // grow with total history, unlike computeMonthSummary above — worth
   // revisiting with an indexed query if history ever reaches tens of
   // thousands of transactions.
-  it('documents that Dashboard render cost grows with total history size (client-side month filter)', async () => {
+  it("documents that Dashboard render cost grows with total history size (client-side month filter)", async () => {
     await seedRealisticHistory(1);
     const t1Start = performance.now();
     render(
@@ -157,20 +180,20 @@ describe('performance — Dashboard / Overview render against realistic history'
   });
 });
 
-describe('performance/capability — CSV export at scale', () => {
-  it('exportTransactionsCSV produces one correctly-formed row per transaction across 3 years of history', async () => {
+describe("performance/capability — CSV export at scale", () => {
+  it("exportTransactionsCSV produces one correctly-formed row per transaction across 3 years of history", async () => {
     const { transactionCount } = await seedRealisticHistory(3);
     const start = performance.now();
     const csv = await exportTransactionsCSV();
     const elapsed = performance.now() - start;
 
-    const lines = csv.trim().split('\n');
+    const lines = csv.trim().split("\n");
     // header + one row per transaction
     expect(lines.length).toBe(transactionCount + 1);
     expect(elapsed).toBeLessThan(2000);
   });
 
-  it('exportFullBackup round-trips category and transaction counts correctly at scale', async () => {
+  it("exportFullBackup round-trips category and transaction counts correctly at scale", async () => {
     const { categoryIds, transactionCount } = await seedRealisticHistory(2, 20);
     const backup = await exportFullBackup();
     const parsed = JSON.parse(backup);

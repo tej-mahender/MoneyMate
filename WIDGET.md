@@ -1,6 +1,7 @@
 # Home-screen Widget — how it works and how to build it
 
 ## Why this needs Android Studio, not just this chat
+
 A true OS-level home-screen widget is native Android UI (`RemoteViews`, drawn by the
 system launcher, not by a webpage). It's compiled as part of the Android app via
 Gradle. I've written and wired up all the native code below, but compiling it into
@@ -10,6 +11,7 @@ open the `android/` folder in it, let it sync, hit Run. That's genuinely the who
 remaining step; no further coding needed.
 
 ## Architecture
+
 The web app (React) never talks to the widget directly — a widget can't run
 JavaScript or read IndexedDB. Instead:
 
@@ -36,12 +38,15 @@ All of this stays on-device. The widget reads a local SharedPreferences file the
 app itself wrote moments earlier — nothing is fetched from a server.
 
 ## Build & install steps
+
 ```
 npm install
 npm run build
 npx cap sync android
 ```
+
 Then either:
+
 - **Android Studio (recommended):** File → Open → select the `android/` folder →
   wait for Gradle sync → click Run (▶) with a device/emulator connected. This
   installs a debug build directly.
@@ -55,7 +60,9 @@ Then either:
   (enable "install from unknown sources" if it's not from the Play Store).
 
 ## Adding the widget to your home screen
+
 Once the app is installed once (so it can write its first snapshot):
+
 1. Long-press an empty area of your Android home screen.
 2. Tap **Widgets**.
 3. Find **Money Mate** → **Glanceable monthly balance**.
@@ -65,6 +72,7 @@ Once the app is installed once (so it can write its first snapshot):
    minutes as a safety net.
 
 ## Known limitations / next steps
+
 - **iOS widgets are not included.** iOS home-screen widgets require WidgetKit
   (Swift/SwiftUI, a separate Xcode "widget extension" target) and can only be
   built on macOS with Xcode — genuinely not possible from this environment at all,

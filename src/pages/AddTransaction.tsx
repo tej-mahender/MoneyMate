@@ -11,7 +11,9 @@ const RECENT_CAT_KEY = "pfos_last_category"; // suffixed per type, e.g. `${RECEN
 export default function AddTransaction() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const editId = searchParams.get("edit") ? Number(searchParams.get("edit")) : null;
+  const editId = searchParams.get("edit")
+    ? Number(searchParams.get("edit"))
+    : null;
   const editingTx = useLiveQuery(
     () => (editId ? db.transactions.get(editId) : undefined),
     [editId],
@@ -29,7 +31,9 @@ export default function AddTransaction() {
   const categories = allCategories.filter((c) => {
     const bracket = bracketById.get(c.bracketId);
     if (!bracket || bracket.archived) return false; // hidden bracket, or an orphaned category with no bracket at all
-    return type === "income" ? bracket.kind === "income" : bracket.kind !== "income";
+    return type === "income"
+      ? bracket.kind === "income"
+      : bracket.kind !== "income";
   });
 
   const [amount, setAmount] = useState("");
@@ -180,7 +184,9 @@ export default function AddTransaction() {
 
           {categories.length === 0 ? (
             <div className="empty" style={{ padding: "20px 8px" }}>
-              No income sources set up yet.
+              {type === "income"
+                ? "No income sources set up yet."
+                : "No categories set up yet."}
               <div style={{ marginTop: 12 }}>
                 <button
                   className="btn secondary"
@@ -201,8 +207,14 @@ export default function AddTransaction() {
                 onChange={(v) => setCategoryId(Number(v))}
                 options={categories.map((c) => {
                   const bracket = bracketById.get(c.bracketId);
-                  const suffix = bracket && bracket.kind !== "spend" ? ` · ${bracket.name}` : "";
-                  return { value: String(c.id), label: `${c.icon} ${c.name}${suffix}` };
+                  const suffix =
+                    bracket && bracket.kind !== "spend"
+                      ? ` · ${bracket.name}`
+                      : "";
+                  return {
+                    value: String(c.id),
+                    label: `${c.icon} ${c.name}${suffix}`,
+                  };
                 })}
               />
 

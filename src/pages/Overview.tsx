@@ -1,10 +1,20 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import { db, type Bracket, type BracketKind } from "../db/db";
-import { fmtMoney, monthKey, monthLabel, todayISO, iconBadgeStyle } from "../lib/format";
+import {
+  fmtMoney,
+  monthKey,
+  monthLabel,
+  todayISO,
+  iconBadgeStyle,
+} from "../lib/format";
 import { Wallet, HelpCircle, Plus, ChevronRight } from "lucide-react";
 
-const KIND_ORDER: Record<BracketKind, number> = { spend: 0, allocation: 1, income: 2 };
+const KIND_ORDER: Record<BracketKind, number> = {
+  spend: 0,
+  allocation: 1,
+  income: 2,
+};
 
 /**
  * Home — the landing screen ("/"), and the top of the hierarchy: income →
@@ -25,7 +35,7 @@ export default function Overview({
 
   const brackets = (useLiveQuery(() => db.brackets.toArray(), []) ?? [])
     .filter((b) => !b.archived)
-    .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || (a.id! - b.id!));
+    .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.id! - b.id!);
   const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
   const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
@@ -53,11 +63,26 @@ export default function Overview({
   const allocationBrackets = brackets.filter((b) => b.kind === "allocation");
   const incomeBrackets = brackets.filter((b) => b.kind === "income");
 
-  const spendCapTotal = spendBrackets.reduce((s, b) => s + bracketFigures(b).target, 0);
-  const spendActualTotal = spendBrackets.reduce((s, b) => s + bracketFigures(b).actual, 0);
-  const allocationTargetTotal = allocationBrackets.reduce((s, b) => s + bracketFigures(b).target, 0);
-  const allocationActualTotal = allocationBrackets.reduce((s, b) => s + bracketFigures(b).actual, 0);
-  const loggedIncome = incomeBrackets.reduce((s, b) => s + bracketFigures(b).actual, 0);
+  const spendCapTotal = spendBrackets.reduce(
+    (s, b) => s + bracketFigures(b).target,
+    0,
+  );
+  const spendActualTotal = spendBrackets.reduce(
+    (s, b) => s + bracketFigures(b).actual,
+    0,
+  );
+  const allocationTargetTotal = allocationBrackets.reduce(
+    (s, b) => s + bracketFigures(b).target,
+    0,
+  );
+  const allocationActualTotal = allocationBrackets.reduce(
+    (s, b) => s + bracketFigures(b).actual,
+    0,
+  );
+  const loggedIncome = incomeBrackets.reduce(
+    (s, b) => s + bracketFigures(b).actual,
+    0,
+  );
   const totalIncome = monthlyIncome + loggedIncome;
   // "Allocated" on the summary tile is the complement of "Unallocated" —
   // every rupee that's been given a job, whether that's a spend cap
@@ -73,10 +98,16 @@ export default function Overview({
   // capped by) any spend-bracket category: a spend category left at 0
   // budget, or a transaction whose category was deleted/never set.
   const cappedCategoryIds = new Set(
-    spendBrackets.flatMap((b) => (catsByBracket.get(b.id!) ?? []).filter((c) => c.budget > 0).map((c) => c.id)),
+    spendBrackets.flatMap((b) =>
+      (catsByBracket.get(b.id!) ?? [])
+        .filter((c) => c.budget > 0)
+        .map((c) => c.id),
+    ),
   );
   const allocationCategoryIds = new Set(
-    allocationBrackets.flatMap((b) => (catsByBracket.get(b.id!) ?? []).map((c) => c.id)),
+    allocationBrackets.flatMap((b) =>
+      (catsByBracket.get(b.id!) ?? []).map((c) => c.id),
+    ),
   );
   const unbudgetedTx = monthTx.filter(
     (t) =>
@@ -88,11 +119,14 @@ export default function Overview({
 
   const trackIncome = totalIncome > 0;
   const unallocated = totalIncome - spendCapTotal - allocationTargetTotal;
-  const actualLeftover = totalIncome - spendActualTotal - allocationActualTotal - unbudgetedSpent;
+  const actualLeftover =
+    totalIncome - spendActualTotal - allocationActualTotal - unbudgetedSpent;
 
   function bracketSubtitle(bracket: Bracket, target: number, actual: number) {
-    if (bracket.kind === "income") return `${fmtMoney(actual, currency)} logged this month`;
-    if (target === 0) return `${fmtMoney(actual, currency)} spent, no target set`;
+    if (bracket.kind === "income")
+      return `${fmtMoney(actual, currency)} logged this month`;
+    if (target === 0)
+      return `${fmtMoney(actual, currency)} spent, no target set`;
     const left = target - actual;
     if (bracket.kind === "spend") {
       return left >= 0
@@ -126,17 +160,34 @@ export default function Overview({
             </div>
           </div>
         ) : (
-          <div className="card" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <HelpCircle size={18} style={{ color: "var(--ink-faint)", flexShrink: 0, marginTop: 2 }} />
+          <div
+            className="card"
+            style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
+          >
+            <HelpCircle
+              size={18}
+              style={{ color: "var(--ink-faint)", flexShrink: 0, marginTop: 2 }}
+            />
             <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-              No income set — each bracket below still tracks its own spend/target. Set a monthly income in{" "}
+              No income set — each bracket below still tracks its own
+              spend/target. Set a monthly income in{" "}
               <button
-                style={{ font: "inherit", color: "var(--ink)", fontWeight: 600, textDecoration: "underline", padding: 0, background: "none", border: "none", cursor: "pointer" }}
+                style={{
+                  font: "inherit",
+                  color: "var(--ink)",
+                  fontWeight: 600,
+                  textDecoration: "underline",
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
                 onClick={() => navigate("/settings")}
               >
                 Settings
               </button>{" "}
-              to see income, allocations, and what's left unallocated, all together.
+              to see income, allocations, and what's left unallocated, all
+              together.
             </div>
           </div>
         )}
@@ -157,7 +208,12 @@ export default function Overview({
                 <div
                   key={b.id}
                   className="tx tx-link"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                  }}
                   onClick={() => navigate("/bracket/" + b.id)}
                 >
                   <div className="tx-left">
@@ -166,15 +222,24 @@ export default function Overview({
                     </div>
                     <div className="tx-meta">
                       <div className="tx-cat">{b.name}</div>
-                      <div className="tx-note">{bracketSubtitle(b, target, actual)}</div>
+                      <div className="tx-note">
+                        {bracketSubtitle(b, target, actual)}
+                      </div>
                     </div>
                   </div>
-                  <ChevronRight size={18} style={{ color: "var(--ink-faint)", flexShrink: 0 }} />
+                  <ChevronRight
+                    size={18}
+                    style={{ color: "var(--ink-faint)", flexShrink: 0 }}
+                  />
                 </div>
               );
             })
           )}
-          <button className="btn secondary" onClick={() => navigate("/settings")} style={{ marginTop: 8 }}>
+          <button
+            className="btn secondary"
+            onClick={() => navigate("/settings")}
+            style={{ marginTop: 8 }}
+          >
             <Plus size={15} style={{ verticalAlign: -2, marginRight: 4 }} />
             Add bracket
           </button>
@@ -183,7 +248,10 @@ export default function Overview({
         <div className="card">
           <h2>
             Other spend
-            <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
+            <span
+              className="muted"
+              style={{ fontFamily: "var(--mono)", fontSize: 11 }}
+            >
               unbudgeted
             </span>
           </h2>
@@ -197,14 +265,21 @@ export default function Overview({
           ) : (
             <div
               className="tx tx-link"
-              style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                cursor: "pointer",
+              }}
               onClick={() => navigate("/history")}
             >
               <div className="tx-meta">
-                <div className="tx-cat">{fmtMoney(unbudgetedSpent, currency)}</div>
+                <div className="tx-cat">
+                  {fmtMoney(unbudgetedSpent, currency)}
+                </div>
                 <div className="tx-note">
-                  {unbudgetedTx.length} transaction{unbudgetedTx.length === 1 ? "" : "s"} against
-                  zero-budget or uncategorized categories
+                  {unbudgetedTx.length} transaction
+                  {unbudgetedTx.length === 1 ? "" : "s"} against zero-budget or
+                  uncategorized categories
                 </div>
               </div>
             </div>
@@ -212,15 +287,22 @@ export default function Overview({
         </div>
 
         {trackIncome && (
-          <div className="card" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <HelpCircle size={18} style={{ color: "var(--ink-faint)", flexShrink: 0, marginTop: 2 }} />
+          <div
+            className="card"
+            style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
+          >
+            <HelpCircle
+              size={18}
+              style={{ color: "var(--ink-faint)", flexShrink: 0, marginTop: 2 }}
+            />
             <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-              <b style={{ color: "var(--ink)" }}>Unallocated</b> = income − every spend bracket's cap − every
-              allocation bracket's target. It's your plan check: a positive number means you haven't given
-              every rupee a job yet; negative means you've planned more than you earn.{" "}
-              <b style={{ color: "var(--ink)" }}>Left right now</b> is{" "}
-              {fmtMoney(actualLeftover, currency)}, based on what's actually been spent/allocated so far this
-              month.
+              <b style={{ color: "var(--ink)" }}>Unallocated</b> = income −
+              every spend bracket's cap − every allocation bracket's target.
+              It's your plan check: a positive number means you haven't given
+              every rupee a job yet; negative means you've planned more than you
+              earn. <b style={{ color: "var(--ink)" }}>Left right now</b> is{" "}
+              {fmtMoney(actualLeftover, currency)}, based on what's actually
+              been spent/allocated so far this month.
             </div>
           </div>
         )}

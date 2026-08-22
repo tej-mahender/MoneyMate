@@ -13,15 +13,15 @@ below for why that distinction drives the whole data model.
 
 ## Screens, at a glance
 
-| Screen | Purpose |
-|---|---|
-| **Home** | Landing screen. Income, and one card per bracket (Expenditure, Savings, Investments, Income, or any custom one) with this month's progress. "Unallocated" — money you haven't given a job to yet — is front and center. |
-| **Budget** | Daily-use shortcut: capped spending only, aggregated across every spend-kind bracket. Ring, by-category breakdown, today/daily-average/days-left, recent transactions. |
-| **Bracket detail** | One reusable page for any bracket's own categories — Rent/Food under Expenditure, Portfolio/Gold under Investments, Salary/Freelance under Income. Add, edit, archive, or delete categories; rename or archive the bracket itself. |
-| **Add transaction** | Log an expense or income entry: amount, category, date, and optional merchant/note. |
-| **History** | Full transaction list with search, month filter, category filter, and a calendar-heatmap view. |
-| **Insights** | Charts: spend trends, category breakdown, income vs. spend, day-of-week patterns, top merchants, budget vs. actual. |
-| **Settings** | Manage brackets, recurring transactions, currency/theme/income preferences, backup & restore, and data exports. |
+| Screen              | Purpose                                                                                                                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Home**            | Landing screen. Income, and one card per bracket (Expenditure, Savings, Investments, Income, or any custom one) with this month's progress. "Unallocated" — money you haven't given a job to yet — is front and center.            |
+| **Budget**          | Daily-use shortcut: capped spending only, aggregated across every spend-kind bracket. Ring, by-category breakdown, today/daily-average/days-left, recent transactions.                                                             |
+| **Bracket detail**  | One reusable page for any bracket's own categories — Rent/Food under Expenditure, Portfolio/Gold under Investments, Salary/Freelance under Income. Add, edit, archive, or delete categories; rename or archive the bracket itself. |
+| **Add transaction** | Log an expense or income entry: amount, category, date, and optional merchant/note.                                                                                                                                                |
+| **History**         | Full transaction list with search, month filter, category filter, and a calendar-heatmap view.                                                                                                                                     |
+| **Insights**        | Charts: spend trends, category breakdown, income vs. spend, day-of-week patterns, top merchants, budget vs. actual.                                                                                                                |
+| **Settings**        | Manage brackets, recurring transactions, currency/theme/income preferences, backup & restore, and data exports.                                                                                                                    |
 
 ## Architecture
 
@@ -33,7 +33,7 @@ Two levels, not one flat list of categories:
   - `spend` — a capped budget. Only `spend`-kind brackets drive the Budget
     screen's ring, "Spent," and "Remaining" figures.
   - `allocation` — a transfer out of income toward a goal (Savings,
-    Investments, EMI…). Has a soft *target*, not a hard cap, and never
+    Investments, EMI…). Has a soft _target_, not a hard cap, and never
     counts against the spending cap.
   - `income` — a source of money in. Budget/target is meaningless here.
 - **Category** — belongs to exactly one bracket and inherits its `kind`.
@@ -80,14 +80,14 @@ way back.
 
 Settings → Analysis exports gives you:
 
-| File | Grain | Use |
-|---|---|---|
-| `pfos-transactions-*.csv` | One row per transaction | Fact table |
-| `pfos-categories-*.csv` | One row per category | Dimension table |
-| `pfos-brackets-*.csv` | One row per bracket | Dimension table |
-| `pfos-monthly-summary-*.csv` | One row per (month, category) | Pre-aggregated budget vs. actual |
-| `pfos-ml-dataset-*.json` | All tables + recurring rules, bundled | Single-file load for a Python/pandas notebook |
-| `pfos-backup-*.json` | Full raw state | Restore/backup — not intended for analysis |
+| File                         | Grain                                 | Use                                           |
+| ---------------------------- | ------------------------------------- | --------------------------------------------- |
+| `pfos-transactions-*.csv`    | One row per transaction               | Fact table                                    |
+| `pfos-categories-*.csv`      | One row per category                  | Dimension table                               |
+| `pfos-brackets-*.csv`        | One row per bracket                   | Dimension table                               |
+| `pfos-monthly-summary-*.csv` | One row per (month, category)         | Pre-aggregated budget vs. actual              |
+| `pfos-ml-dataset-*.json`     | All tables + recurring rules, bundled | Single-file load for a Python/pandas notebook |
+| `pfos-backup-*.json`         | Full raw state                        | Restore/backup — not intended for analysis    |
 
 Full column-level documentation and a Power BI setup guide are in
 [`DATA_SCHEMA.md`](./DATA_SCHEMA.md).

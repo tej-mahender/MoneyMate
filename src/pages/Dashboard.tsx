@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
-import { db } from "../db/db";
+import { db, computeMonthSummary } from "../db/db";
 import {
   fmtMoney,
   monthKey,
@@ -34,15 +34,23 @@ export default function Dashboard({
   const curMonth = monthKey(todayISO());
 
   const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
-  const spendBracketIds = new Set(brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id));
+  const spendBracketIds = new Set(
+    brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id),
+  );
   // Allocation exclusion intentionally isn't archived-filtered — an
   // archived Savings bracket's transactions still shouldn't get swept into
   // "Spent" against the budget cap just because the bracket is hidden.
-  const allocationBracketIds = new Set(brackets.filter((b) => b.kind === "allocation").map((b) => b.id));
+  const allocationBracketIds = new Set(
+    brackets.filter((b) => b.kind === "allocation").map((b) => b.id),
+  );
   const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const categories = allCats.filter((c) => !c.archived && spendBracketIds.has(c.bracketId));
+  const categories = allCats.filter(
+    (c) => !c.archived && spendBracketIds.has(c.bracketId),
+  );
   const allocationCategoryIds = new Set(
-    allCats.filter((c) => allocationBracketIds.has(c.bracketId)).map((c) => c.id),
+    allCats
+      .filter((c) => allocationBracketIds.has(c.bracketId))
+      .map((c) => c.id),
   );
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
 
@@ -55,9 +63,23 @@ export default function Dashboard({
     (t) => t.type === "expense" && !allocationCategoryIds.has(t.categoryId),
   );
 
-  const totalBudget = categories.reduce((s, c) => s + c.budget, 0);
-  const totalSpent = spentTx.reduce((s, t) => s + t.amount, 0);
-  const remaining = totalBudget - totalSpent;
+  // The top-line Budgeted/Spent/Remaining figures come from
+  // computeMonthSummary() — the same indexed-query calculation the widget
+  // uses — rather than a second hand-rolled copy of this math living only
+  // here. Two independent implementations of "what does Budget mean" is
+  // exactly the failure mode that's bitten this app before (Dashboard once
+  // silently disagreed with Home/BracketDetail about archived categories);
+  // routing both through one function makes that class of bug structurally
+  // impossible instead of something to remember to keep in sync by hand.
+  const summary = useLiveQuery(() => computeMonthSummary(), [curMonth]) ?? {
+    spent: 0,
+    budget: 0,
+    remaining: 0,
+    monthKey: curMonth,
+  };
+  const totalBudget = summary.budget;
+  const totalSpent = summary.spent;
+  const remaining = summary.remaining;
 
   const elapsed = dayOfMonthProgress(curMonth);
   const totalDays = daysInMonth(curMonth);
@@ -77,11 +99,11 @@ export default function Dashboard({
 
   const catMap = new Map(allCats.map((c) => [c.id, c]));
 
- const budgetPctRaw = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
- const budgetPct = Math.min(budgetPctRaw, 100);
- const ringState =
-   budgetPctRaw < 75 ? "good" : budgetPctRaw < 100 ? "warn" : "over";
- const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
+  const budgetPctRaw = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  const budgetPct = Math.min(budgetPctRaw, 100);
+  const ringState =
+    budgetPctRaw < 75 ? "good" : budgetPctRaw < 100 ? "warn" : "over";
+  const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
 
   // Per-category spend this month, for the large widget's mini breakdown.
   // Sorted by spend (not budget) so the rows show "what's actually eating
@@ -245,10 +267,7 @@ export default function Dashboard({
                   onClick={() => navigate(`/transaction/${t.id}`)}
                 >
                   <div className="tx-left">
-                    <div
-                      className="tx-icon"
-                      style={iconBadgeStyle(c?.color)}
-                    >
+                    <div className="tx-icon" style={iconBadgeStyle(c?.color)}>
                       {c?.icon || "＊"}
                     </div>
                     <div className="tx-meta">

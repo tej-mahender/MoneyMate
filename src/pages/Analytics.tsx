@@ -79,15 +79,21 @@ export default function Analytics({ currency }: { currency: string }) {
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
-  const spendBracketIds = new Set(brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id));
+  const spendBracketIds = new Set(
+    brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id),
+  );
   // Money moved into an allocation bracket (Savings/Investments/EMI…) is
   // logged as an ordinary expense-type transaction, but it isn't spend —
   // Dashboard already excludes it from "Spent"; every figure derived from
   // rangeExpenses below (pie chart, trend line, top merchants, insights)
   // needs the same exclusion so a savings transfer doesn't inflate them.
-  const allocationBracketIds = new Set(brackets.filter((b) => b.kind === "allocation").map((b) => b.id));
+  const allocationBracketIds = new Set(
+    brackets.filter((b) => b.kind === "allocation").map((b) => b.id),
+  );
   const allocationCategoryIds = new Set(
-    categories.filter((c) => allocationBracketIds.has(c.bracketId)).map((c) => c.id),
+    categories
+      .filter((c) => allocationBracketIds.has(c.bracketId))
+      .map((c) => c.id),
   );
   const catMap = new Map(categories.map((c) => [c.id, c]));
   const curMonth = monthKey(todayISO());
@@ -665,7 +671,9 @@ export default function Analytics({ currency }: { currency: string }) {
                 <div className="tx-left">
                   <div
                     className="tx-icon"
-                    style={iconBadgeStyle(SERIES_COLORS[i % SERIES_COLORS.length])}
+                    style={iconBadgeStyle(
+                      SERIES_COLORS[i % SERIES_COLORS.length],
+                    )}
                   >
                     {i + 1}
                   </div>
@@ -689,7 +697,8 @@ export default function Analytics({ currency }: { currency: string }) {
               {monthLabel(curMonth)}
             </span>
           </h2>
-          {categories.filter((c) => spendBracketIds.has(c.bracketId)).length === 0 ? (
+          {categories.filter((c) => spendBracketIds.has(c.bracketId)).length ===
+          0 ? (
             <div className="empty">
               <div className="glyph">
                 <BarChart3 size={30} strokeWidth={1.5} />
@@ -701,7 +710,8 @@ export default function Analytics({ currency }: { currency: string }) {
               width="100%"
               height={Math.max(
                 160,
-                categories.filter((c) => spendBracketIds.has(c.bracketId)).length * 44,
+                categories.filter((c) => spendBracketIds.has(c.bracketId))
+                  .length * 44,
               )}
             >
               <BarChart

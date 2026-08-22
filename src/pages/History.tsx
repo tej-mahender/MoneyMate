@@ -183,10 +183,7 @@ export default function History({ currency }: { currency: string }) {
                   onClick={() => navigate(`/transaction/${t.id}`)}
                 >
                   <div className="tx-left">
-                    <div
-                      className="tx-icon"
-                      style={iconBadgeStyle(c?.color)}
-                    >
+                    <div className="tx-icon" style={iconBadgeStyle(c?.color)}>
                       {c?.icon || "＊"}
                     </div>
                     <div className="tx-meta">

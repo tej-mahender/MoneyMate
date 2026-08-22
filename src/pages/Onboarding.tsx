@@ -83,7 +83,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   // db.ts), so this either becomes one lump-sum starter category (if the
   // person skips step 3 for that bracket) or is just discarded once real
   // categories exist for it.
-  const [bracketAmounts, setBracketAmounts] = useState<Record<string, string>>({});
+  const [bracketAmounts, setBracketAmounts] = useState<Record<string, string>>(
+    {},
+  );
   function setBracketAmount(name: string, val: string) {
     setBracketAmounts((prev) => ({ ...prev, [name]: val }));
   }
@@ -100,7 +102,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   // Emergency Fund, or whatever the person actually holds, added only if
   // they want that level of detail. Skipping a bracket entirely here just
   // means it keeps the single lump-sum amount from step 2.
-  const [catsByBracket, setCatsByBracket] = useState<Record<string, DraftCat[]>>({
+  const [catsByBracket, setCatsByBracket] = useState<
+    Record<string, DraftCat[]>
+  >({
     Expenditure: DEFAULT_EXPENDITURE_CATEGORIES.map((c) => ({
       name: c.name,
       icon: c.icon,
@@ -112,10 +116,17 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   });
   const [saving, setSaving] = useState(false);
 
-  function updateCat(bracketName: string, i: number, field: keyof DraftCat, val: string) {
+  function updateCat(
+    bracketName: string,
+    i: number,
+    field: keyof DraftCat,
+    val: string,
+  ) {
     setCatsByBracket((prev) => ({
       ...prev,
-      [bracketName]: prev[bracketName].map((c, idx) => (idx === i ? { ...c, [field]: val } : c)),
+      [bracketName]: prev[bracketName].map((c, idx) =>
+        idx === i ? { ...c, [field]: val } : c,
+      ),
     }));
   }
   function addCat(bracketName: string) {
@@ -123,7 +134,12 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       ...prev,
       [bracketName]: [
         ...prev[bracketName],
-        { name: "", icon: "＊", color: PALETTE[prev[bracketName].length % PALETTE.length], budget: "" },
+        {
+          name: "",
+          icon: "＊",
+          color: PALETTE[prev[bracketName].length % PALETTE.length],
+          budget: "",
+        },
       ],
     }));
   }
@@ -151,7 +167,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         .filter((c) => c.name.length > 0);
 
       if (clean.length > 0) {
-        await db.categories.bulkAdd(clean.map((c) => ({ ...c, bracketId: bracketIds[bracket.name] })));
+        await db.categories.bulkAdd(
+          clean.map((c) => ({ ...c, bracketId: bracketIds[bracket.name] })),
+        );
       }
 
       // Whether the step-2 lump sum still needs to be applied depends on
@@ -296,16 +314,27 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
               <h1 style={{ fontSize: 21 }}>Divide it up</h1>
               <p>
-                A rough split is enough to start — Rent vs. Food vs. everything else comes next. You can leave any
-                of these at 0 and fill them in later.
+                A rough split is enough to start — Rent vs. Food vs. everything
+                else comes next. You can leave any of these at 0 and fill them
+                in later.
               </p>
               <StepDots active={2} />
             </div>
             <div className="card">
               <h2>Brackets</h2>
               {incomeNum > 0 && (
-                <div className="cat-edit-row" style={{ borderBottom: "1px dashed var(--surface-border)" }}>
-                  <div className="tx-icon" style={{ background: "color-mix(in srgb, var(--good) 18%, transparent)", color: "var(--good)" }}>
+                <div
+                  className="cat-edit-row"
+                  style={{ borderBottom: "1px dashed var(--surface-border)" }}
+                >
+                  <div
+                    className="tx-icon"
+                    style={{
+                      background:
+                        "color-mix(in srgb, var(--good) 18%, transparent)",
+                      color: "var(--good)",
+                    }}
+                  >
                     💼
                   </div>
                   <div style={{ flex: 1 }}>
@@ -322,7 +351,12 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                   <div className="tx-icon" style={iconBadgeStyle(b.color)}>
                     {b.icon}
                   </div>
-                  <input type="text" value={b.name} disabled style={{ flex: 1, opacity: 0.75 }} />
+                  <input
+                    type="text"
+                    value={b.name}
+                    disabled
+                    style={{ flex: 1, opacity: 0.75 }}
+                  />
                   <input
                     type="number"
                     placeholder="0"
@@ -333,7 +367,14 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                 </div>
               ))}
               {incomeNum > 0 && (
-                <p className={"muted"} style={{ marginTop: 8, color: unallocated < 0 ? "var(--danger, #FF6B6B)" : undefined }}>
+                <p
+                  className={"muted"}
+                  style={{
+                    marginTop: 8,
+                    color:
+                      unallocated < 0 ? "var(--danger, #FF6B6B)" : undefined,
+                  }}
+                >
                   {unallocated >= 0
                     ? `${currency}${unallocated.toLocaleString()} unallocated so far`
                     : `${currency}${Math.abs(unallocated).toLocaleString()} over your income — you can adjust these later anytime`}
@@ -354,9 +395,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             <div className="onboard-hero" style={{ padding: "30px 8px 4px" }}>
               <h1 style={{ fontSize: 21 }}>Break it down (optional)</h1>
               <p>
-                Split any bracket into specific categories — Rent/Food under Expenditure, Portfolio/Gold under
-                Investments, whatever you actually track. Skip a bracket entirely and it just keeps the lump-sum
-                amount from the last step.
+                Split any bracket into specific categories — Rent/Food under
+                Expenditure, Portfolio/Gold under Investments, whatever you
+                actually track. Skip a bracket entirely and it just keeps the
+                lump-sum amount from the last step.
               </p>
               <StepDots active={3} />
             </div>
@@ -371,20 +413,28 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                       icon={c.icon}
                       color={c.color}
                       palette={PALETTE}
-                      onIconChange={(icon) => updateCat(b.name, i, "icon", icon)}
-                      onColorChange={(color) => updateCat(b.name, i, "color", color)}
+                      onIconChange={(icon) =>
+                        updateCat(b.name, i, "icon", icon)
+                      }
+                      onColorChange={(color) =>
+                        updateCat(b.name, i, "color", color)
+                      }
                     />
                     <input
                       type="text"
                       placeholder="Category"
                       value={c.name}
-                      onChange={(e) => updateCat(b.name, i, "name", e.target.value)}
+                      onChange={(e) =>
+                        updateCat(b.name, i, "name", e.target.value)
+                      }
                     />
                     <input
                       type="number"
                       placeholder="Budget"
                       value={c.budget}
-                      onChange={(e) => updateCat(b.name, i, "budget", e.target.value)}
+                      onChange={(e) =>
+                        updateCat(b.name, i, "budget", e.target.value)
+                      }
                       onWheel={(e) => e.currentTarget.blur()}
                     />
                     <button
@@ -396,7 +446,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                     </button>
                   </div>
                 ))}
-                <button className="btn secondary" onClick={() => addCat(b.name)}>
+                <button
+                  className="btn secondary"
+                  onClick={() => addCat(b.name)}
+                >
                   + Add category
                 </button>
               </div>

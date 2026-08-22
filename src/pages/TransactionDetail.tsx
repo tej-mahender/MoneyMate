@@ -76,7 +76,10 @@ export default function TransactionDetail({ currency }: { currency: string }) {
               </div>
               This transaction no longer exists — it may have been deleted.
             </div>
-            <button className="btn secondary" onClick={() => navigate("/history")}>
+            <button
+              className="btn secondary"
+              onClick={() => navigate("/history")}
+            >
               Back to history
             </button>
           </div>
@@ -136,9 +139,7 @@ export default function TransactionDetail({ currency }: { currency: string }) {
           >
             {category?.icon || "＊"}
           </div>
-          <div
-            className={"detail-amount" + (isIncome ? " income" : "")}
-          >
+          <div className={"detail-amount" + (isIncome ? " income" : "")}>
             {isIncome ? "+" : "−"}
             {fmtMoney(t.amount, currency)}
           </div>
@@ -193,12 +194,20 @@ export default function TransactionDetail({ currency }: { currency: string }) {
           </div>
         )}
 
-        <button className="btn secondary" onClick={() => navigate(`/add?edit=${t.id}`)}>
+        <button
+          className="btn secondary"
+          onClick={() => navigate(`/add?edit=${t.id}`)}
+        >
           Edit transaction
         </button>
         <button className="btn danger" onClick={handleDelete}>
           <span
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              justifyContent: "center",
+            }}
           >
             <Trash2 size={15} /> Delete transaction
           </span>

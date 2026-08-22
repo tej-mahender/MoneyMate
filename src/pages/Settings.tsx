@@ -1,21 +1,56 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { useNavigate } from 'react-router-dom';
-import { db, type Category, type Bracket, type BracketKind, type Recurring, type Frequency, updateSettings, type Settings as SettingsType, ensureIncomeCategoriesSeeded } from '../db/db';
-import { X, ChevronRight, Plus } from 'lucide-react';
-import Dropdown from '../components/Dropdown';
+import { useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { useNavigate } from "react-router-dom";
 import {
-  exportFullBackup, exportTransactionsCSV, exportCategoriesCSV, exportBracketsCSV, exportMonthlySummaryCSV,
-  exportMLDatasetJSON, importFullBackup, downloadFile,
-} from '../lib/csv';
-import { todayISO, iconBadgeStyle } from '../lib/format';
-import { useUIStore } from '../store/useUIStore';
-import IconPicker from '../components/IconPicker';
+  db,
+  type Category,
+  type Bracket,
+  type BracketKind,
+  type Recurring,
+  type Frequency,
+  updateSettings,
+  type Settings as SettingsType,
+  ensureIncomeCategoriesSeeded,
+} from "../db/db";
+import { X, ChevronRight, Plus } from "lucide-react";
+import Dropdown from "../components/Dropdown";
+import {
+  exportFullBackup,
+  exportTransactionsCSV,
+  exportCategoriesCSV,
+  exportBracketsCSV,
+  exportMonthlySummaryCSV,
+  exportMLDatasetJSON,
+  importFullBackup,
+  downloadFile,
+} from "../lib/csv";
+import { todayISO, iconBadgeStyle } from "../lib/format";
+import { useUIStore } from "../store/useUIStore";
+import IconPicker from "../components/IconPicker";
 
-const PALETTE = ['#F0B94D', '#4FD9B8', '#7C93F0', '#E8618C', '#B98CF0', '#F0A83E', '#FF6B6B', '#6FC98A'];
-const KIND_LABEL: Record<BracketKind, string> = { spend: 'Budget cap', allocation: 'Allocation', income: 'Income' };
+const PALETTE = [
+  "#F0B94D",
+  "#4FD9B8",
+  "#7C93F0",
+  "#E8618C",
+  "#B98CF0",
+  "#F0A83E",
+  "#FF6B6B",
+  "#6FC98A",
+];
+const KIND_LABEL: Record<BracketKind, string> = {
+  spend: "Budget cap",
+  allocation: "Allocation",
+  income: "Income",
+};
 
-export default function Settings({ settings, onSettingsChange }: { settings: SettingsType; onSettingsChange: (s: SettingsType) => void }) {
+export default function Settings({
+  settings,
+  onSettingsChange,
+}: {
+  settings: SettingsType;
+  onSettingsChange: (s: SettingsType) => void;
+}) {
   const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
@@ -28,7 +63,10 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   const categoryCountByBracket = new Map<number, number>();
   for (const c of categories) {
     if (c.archived) continue;
-    categoryCountByBracket.set(c.bracketId, (categoryCountByBracket.get(c.bracketId) ?? 0) + 1);
+    categoryCountByBracket.set(
+      c.bracketId,
+      (categoryCountByBracket.get(c.bracketId) ?? 0) + 1,
+    );
   }
 
   // Adding a bracket is the only thing Settings does directly — everything
@@ -36,26 +74,29 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   // happens on that bracket's own page, reached by tapping its row below.
   // One reusable page instead of duplicating category-editing UI per kind.
   const [showAddBracket, setShowAddBracket] = useState(false);
-  const [newBracketName, setNewBracketName] = useState('');
-  const [newBracketIcon, setNewBracketIcon] = useState('＊');
+  const [newBracketName, setNewBracketName] = useState("");
+  const [newBracketIcon, setNewBracketIcon] = useState("＊");
   const [newBracketColor, setNewBracketColor] = useState(PALETTE[0]);
-  const [newBracketKind, setNewBracketKind] = useState<BracketKind>('spend');
+  const [newBracketKind, setNewBracketKind] = useState<BracketKind>("spend");
 
   async function addBracket() {
-    if (!newBracketName.trim()) { showToast('Give the bracket a name.'); return; }
+    if (!newBracketName.trim()) {
+      showToast("Give the bracket a name.");
+      return;
+    }
     const id = await db.brackets.add({
       name: newBracketName.trim(),
       icon: newBracketIcon,
       color: newBracketColor,
       kind: newBracketKind,
     });
-    setNewBracketName('');
-    setNewBracketIcon('＊');
+    setNewBracketName("");
+    setNewBracketIcon("＊");
     setNewBracketColor(PALETTE[0]);
-    setNewBracketKind('spend');
+    setNewBracketKind("spend");
     setShowAddBracket(false);
     showToast(`"${newBracketName.trim()}" bracket added.`);
-    navigate('/bracket/' + id);
+    navigate("/bracket/" + id);
   }
 
   // Deleting a category outright silently orphans any transaction that
@@ -77,21 +118,30 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   }
 
   // Recurring
-  const [rName, setRName] = useState('');
-  const [rAmount, setRAmount] = useState('');
+  const [rName, setRName] = useState("");
+  const [rAmount, setRAmount] = useState("");
   const [rCat, setRCat] = useState<number | null>(null);
-  const [rFreq, setRFreq] = useState<Frequency>('monthly');
-  const [rType, setRType] = useState<'expense' | 'income'>('expense');
+  const [rFreq, setRFreq] = useState<Frequency>("monthly");
+  const [rType, setRType] = useState<"expense" | "income">("expense");
 
   async function addRecurring() {
     const amt = parseFloat(rAmount);
-    if (!rName.trim() || !amt || !rCat) { showToast('Fill in name, amount, and category.'); return; }
+    if (!rName.trim() || !amt || !rCat) {
+      showToast("Fill in name, amount, and category.");
+      return;
+    }
     await db.recurring.add({
-      name: rName.trim(), amount: amt, categoryId: rCat, frequency: rFreq, type: rType,
-      startDate: todayISO(), nextDate: todayISO(),
+      name: rName.trim(),
+      amount: amt,
+      categoryId: rCat,
+      frequency: rFreq,
+      type: rType,
+      startDate: todayISO(),
+      nextDate: todayISO(),
     });
-    setRName(''); setRAmount('');
-    showToast('Recurring item added — it will post automatically.');
+    setRName("");
+    setRAmount("");
+    showToast("Recurring item added — it will post automatically.");
   }
   async function togglePause(r: Recurring) {
     await db.recurring.update(r.id!, { paused: !r.paused });
@@ -101,12 +151,14 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
   }
 
   // Preferences
-  const [incomeDraft, setIncomeDraft] = useState(String(settings.monthlyIncome || ''));
+  const [incomeDraft, setIncomeDraft] = useState(
+    String(settings.monthlyIncome || ""),
+  );
   async function setCurrency(c: string) {
     const next = await updateSettings({ currency: c });
     onSettingsChange(next);
   }
-  async function setTheme(t: SettingsType['theme']) {
+  async function setTheme(t: SettingsType["theme"]) {
     const next = await updateSettings({ theme: t });
     onSettingsChange(next);
   }
@@ -119,55 +171,104 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
     if (val > 0) await ensureIncomeCategoriesSeeded();
     const next = await updateSettings({ monthlyIncome: val });
     onSettingsChange(next);
-    showToast(val > 0 ? 'Income tracking is on.' : 'Income tracking is off — dashboard shows budget only.');
+    showToast(
+      val > 0
+        ? "Income tracking is on."
+        : "Income tracking is off — dashboard shows budget only.",
+    );
   }
 
   // Data management
   async function doExportJSON() {
-    downloadFile(`pfos-backup-${todayISO()}.json`, await exportFullBackup(), 'application/json');
+    downloadFile(
+      `pfos-backup-${todayISO()}.json`,
+      await exportFullBackup(),
+      "application/json",
+    );
   }
   async function doExportCSV() {
-    downloadFile(`pfos-transactions-${todayISO()}.csv`, await exportTransactionsCSV(), 'text/csv');
+    downloadFile(
+      `pfos-transactions-${todayISO()}.csv`,
+      await exportTransactionsCSV(),
+      "text/csv",
+    );
   }
   async function doExportCategoriesCSV() {
-    downloadFile(`pfos-categories-${todayISO()}.csv`, await exportCategoriesCSV(), 'text/csv');
+    downloadFile(
+      `pfos-categories-${todayISO()}.csv`,
+      await exportCategoriesCSV(),
+      "text/csv",
+    );
   }
   async function doExportBracketsCSV() {
-    downloadFile(`pfos-brackets-${todayISO()}.csv`, await exportBracketsCSV(), 'text/csv');
+    downloadFile(
+      `pfos-brackets-${todayISO()}.csv`,
+      await exportBracketsCSV(),
+      "text/csv",
+    );
   }
   async function doExportMonthlySummaryCSV() {
-    downloadFile(`pfos-monthly-summary-${todayISO()}.csv`, await exportMonthlySummaryCSV(), 'text/csv');
+    downloadFile(
+      `pfos-monthly-summary-${todayISO()}.csv`,
+      await exportMonthlySummaryCSV(),
+      "text/csv",
+    );
   }
   async function doExportMLDataset() {
-    downloadFile(`pfos-ml-dataset-${todayISO()}.json`, await exportMLDatasetJSON(), 'application/json');
+    downloadFile(
+      `pfos-ml-dataset-${todayISO()}.json`,
+      await exportMLDatasetJSON(),
+      "application/json",
+    );
   }
   async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!confirm('Restoring a backup replaces every category, transaction, and recurring item currently on this device. This can\'t be undone. Continue?')) {
-      e.target.value = '';
+    if (
+      !confirm(
+        "Restoring a backup replaces every category, transaction, and recurring item currently on this device. This can't be undone. Continue?",
+      )
+    ) {
+      e.target.value = "";
       return;
     }
     const text = await file.text();
     try {
       await importFullBackup(text);
-      showToast('Backup restored.');
+      showToast("Backup restored.");
       const s = await updateSettings({});
       onSettingsChange(s);
     } catch (err) {
-      showToast(err instanceof Error && err.message ? err.message : "That file doesn't look like a valid backup.");
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "That file doesn't look like a valid backup.",
+      );
     }
-    e.target.value = '';
+    e.target.value = "";
   }
   async function wipeAll() {
-    if (!confirm("This deletes every category, transaction, and recurring item on this device. This can't be undone. Continue?")) return;
-    await db.transaction('rw', db.brackets, db.categories, db.transactions, db.recurring, db.settings, async () => {
-      await db.brackets.clear();
-      await db.categories.clear();
-      await db.transactions.clear();
-      await db.recurring.clear();
-      await db.settings.clear();
-    });
+    if (
+      !confirm(
+        "This deletes every category, transaction, and recurring item on this device. This can't be undone. Continue?",
+      )
+    )
+      return;
+    await db.transaction(
+      "rw",
+      db.brackets,
+      db.categories,
+      db.transactions,
+      db.recurring,
+      db.settings,
+      async () => {
+        await db.brackets.clear();
+        await db.categories.clear();
+        await db.transactions.clear();
+        await db.recurring.clear();
+        await db.settings.clear();
+      },
+    );
     location.reload();
   }
 
@@ -181,38 +282,52 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
         <div className="card">
           <h2>Brackets</h2>
           <p className="muted" style={{ marginBottom: 12 }}>
-            The top level: Expenditure, Savings, Investments, Income, or anything else you add. Tap a bracket to
-            manage its categories (Rent/Food under Expenditure, Portfolio/Gold under Investments, etc.) — sub-dividing
-            is entirely optional per bracket.
+            Expenditure, Savings, Investments, Income, or your own. Tap one to
+            manage its categories — sub-dividing is optional.
           </p>
           {activeBrackets.length === 0 ? (
-            <p className="muted" style={{ marginBottom: 12 }}>None yet. Add one below.</p>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              None yet. Add one below.
+            </p>
           ) : (
             activeBrackets.map((b) => (
               <div
                 key={b.id}
                 className="tx tx-link"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-                onClick={() => navigate('/bracket/' + b.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  cursor: "pointer",
+                }}
+                onClick={() => navigate("/bracket/" + b.id)}
               >
                 <div className="tx-left">
-                  <div className="tx-icon" style={iconBadgeStyle(b.color)}>{b.icon}</div>
+                  <div className="tx-icon" style={iconBadgeStyle(b.color)}>
+                    {b.icon}
+                  </div>
                   <div className="tx-meta">
                     <div className="tx-cat">{b.name}</div>
                     <div className="tx-note">
-                      {KIND_LABEL[b.kind]} · {categoryCountByBracket.get(b.id!) ?? 0} categor
-                      {(categoryCountByBracket.get(b.id!) ?? 0) === 1 ? 'y' : 'ies'}
+                      {KIND_LABEL[b.kind]} ·{" "}
+                      {categoryCountByBracket.get(b.id!) ?? 0} categor
+                      {(categoryCountByBracket.get(b.id!) ?? 0) === 1
+                        ? "y"
+                        : "ies"}
                     </div>
                   </div>
                 </div>
-                <ChevronRight size={18} style={{ color: 'var(--ink-faint)', flexShrink: 0 }} />
+                <ChevronRight
+                  size={18}
+                  style={{ color: "var(--ink-faint)", flexShrink: 0 }}
+                />
               </div>
             ))
           )}
 
           {showAddBracket ? (
             <div style={{ marginTop: 12 }}>
-              <div className="cat-edit-row" style={{ borderBottom: 'none' }}>
+              <div className="cat-edit-row" style={{ borderBottom: "none" }}>
                 <IconPicker
                   icon={newBracketIcon}
                   color={newBracketColor}
@@ -220,19 +335,57 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
                   onIconChange={setNewBracketIcon}
                   onColorChange={setNewBracketColor}
                 />
-                <input type="text" placeholder="Bracket name (e.g. EMI)" value={newBracketName} onChange={(e) => setNewBracketName(e.target.value)} style={{ flex: 1 }} />
+                <input
+                  type="text"
+                  placeholder="Bracket name (e.g. EMI)"
+                  value={newBracketName}
+                  onChange={(e) => setNewBracketName(e.target.value)}
+                  style={{ flex: 1 }}
+                />
               </div>
               <label>Behaves like</label>
               <div className="chip-row">
-                <button className={'chip' + (newBracketKind === 'spend' ? ' active' : '')} onClick={() => setNewBracketKind('spend')}>Budget cap</button>
-                <button className={'chip' + (newBracketKind === 'allocation' ? ' active' : '')} onClick={() => setNewBracketKind('allocation')}>Allocation</button>
-                <button className={'chip' + (newBracketKind === 'income' ? ' active' : '')} onClick={() => setNewBracketKind('income')}>Income</button>
+                <button
+                  className={
+                    "chip" + (newBracketKind === "spend" ? " active" : "")
+                  }
+                  onClick={() => setNewBracketKind("spend")}
+                >
+                  Budget cap
+                </button>
+                <button
+                  className={
+                    "chip" + (newBracketKind === "allocation" ? " active" : "")
+                  }
+                  onClick={() => setNewBracketKind("allocation")}
+                >
+                  Allocation
+                </button>
+                <button
+                  className={
+                    "chip" + (newBracketKind === "income" ? " active" : "")
+                  }
+                  onClick={() => setNewBracketKind("income")}
+                >
+                  Income
+                </button>
               </div>
-              <button className="btn" onClick={addBracket}>Create bracket</button>
-              <button className="btn ghost" onClick={() => setShowAddBracket(false)}>Cancel</button>
+              <button className="btn" onClick={addBracket}>
+                Create bracket
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => setShowAddBracket(false)}
+              >
+                Cancel
+              </button>
             </div>
           ) : (
-            <button className="btn secondary" onClick={() => setShowAddBracket(true)} style={{ marginTop: 8 }}>
+            <button
+              className="btn secondary"
+              onClick={() => setShowAddBracket(true)}
+              style={{ marginTop: 8 }}
+            >
               <Plus size={15} style={{ verticalAlign: -2, marginRight: 4 }} />
               Add bracket
             </button>
@@ -243,13 +396,27 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <div className="card">
             <h2>Archived brackets</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Hidden from Home, Settings, and new transactions — everything inside is untouched. Restore one to
-              use it again.
+              Hidden everywhere, but untouched. Restore anytime.
             </p>
             {archivedBrackets.map((b) => (
-              <div key={b.id} className="tx tx-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>{b.icon} {b.name}</span>
-                <button className="btn small secondary" onClick={() => restoreBracket(b)}>Restore</button>
+              <div
+                key={b.id}
+                className="tx tx-link"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>
+                  {b.icon} {b.name}
+                </span>
+                <button
+                  className="btn small secondary"
+                  onClick={() => restoreBracket(b)}
+                >
+                  Restore
+                </button>
               </div>
             ))}
           </div>
@@ -259,22 +426,31 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
           <div className="card">
             <h2>Archived categories</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Hidden from new transactions, but their existing history is untouched. Restore one to use it again.
+              Hidden from new transactions; history stays intact.
             </p>
             {archivedCategories.map((c) => (
               <div className="tx" key={c.id}>
                 <div className="tx-left">
-                  <div className="tx-icon" style={iconBadgeStyle(c.color)}>{c.icon}</div>
+                  <div className="tx-icon" style={iconBadgeStyle(c.color)}>
+                    {c.icon}
+                  </div>
                   <div className="tx-meta">
                     <div className="tx-cat">{c.name}</div>
-                    <div className="tx-note">{(() => {
-                      const kind = bracketById.get(c.bracketId)?.kind;
-                      return kind ? KIND_LABEL[kind] : 'Category';
-                    })()}</div>
+                    <div className="tx-note">
+                      {(() => {
+                        const kind = bracketById.get(c.bracketId)?.kind;
+                        return kind ? KIND_LABEL[kind] : "Category";
+                      })()}
+                    </div>
                   </div>
                 </div>
                 <div className="tx-right">
-                  <button className="btn small secondary" onClick={() => restoreCategory(c)}>Restore</button>
+                  <button
+                    className="btn small secondary"
+                    onClick={() => restoreCategory(c)}
+                  >
+                    Restore
+                  </button>
                 </div>
               </div>
             ))}
@@ -284,33 +460,63 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
         <div className="card">
           <h2>Recurring transactions</h2>
           {recurring.length === 0 ? (
-            <div className="muted" style={{ marginBottom: 12 }}>None yet — rent, subscriptions, salary, EMIs all post automatically once added.</div>
+            <div className="muted" style={{ marginBottom: 12 }}>
+              None yet — rent, subscriptions, salary, EMIs all post
+              automatically once added.
+            </div>
           ) : (
             recurring.map((r) => {
               const c = categories.find((cat) => cat.id === r.categoryId);
               return (
                 <div className="tx" key={r.id}>
                   <div className="tx-left">
-                    <div className="tx-icon" style={iconBadgeStyle(c?.color)}>{c?.icon || '＊'}</div>
+                    <div className="tx-icon" style={iconBadgeStyle(c?.color)}>
+                      {c?.icon || "＊"}
+                    </div>
                     <div className="tx-meta">
                       <div className="tx-cat">{r.name}</div>
-                      <div className="tx-note">{r.frequency} · next {r.nextDate}{r.paused ? ' · paused' : ''}</div>
+                      <div className="tx-note">
+                        {r.frequency} · next {r.nextDate}
+                        {r.paused ? " · paused" : ""}
+                      </div>
                     </div>
                   </div>
                   <div className="tx-right">
-                    <button className="btn small secondary" onClick={() => togglePause(r)}>{r.paused ? 'Resume' : 'Pause'}</button>
-                    <button className="icon-btn danger" onClick={() => deleteRecurring(r.id!)}><X size={15} /></button>
+                    <button
+                      className="btn small secondary"
+                      onClick={() => togglePause(r)}
+                    >
+                      {r.paused ? "Resume" : "Pause"}
+                    </button>
+                    <button
+                      className="icon-btn danger"
+                      onClick={() => deleteRecurring(r.id!)}
+                    >
+                      <X size={15} />
+                    </button>
                   </div>
                 </div>
               );
             })
           )}
           <label htmlFor="recurring-name">Name</label>
-          <input id="recurring-name" type="text" placeholder="e.g. Rent, Netflix, Salary" value={rName} onChange={(e) => setRName(e.target.value)} />
+          <input
+            id="recurring-name"
+            type="text"
+            placeholder="e.g. Rent, Netflix, Salary"
+            value={rName}
+            onChange={(e) => setRName(e.target.value)}
+          />
           <div className="row2">
             <div>
               <label htmlFor="recurring-amount">Amount</label>
-              <input id="recurring-amount" type="number" value={rAmount} onChange={(e) => setRAmount(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
+              <input
+                id="recurring-amount"
+                type="number"
+                value={rAmount}
+                onChange={(e) => setRAmount(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
+              />
             </div>
             <div>
               <label>Frequency</label>
@@ -318,10 +524,10 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
                 value={rFreq}
                 onChange={(v) => setRFreq(v as Frequency)}
                 options={[
-                  { value: 'daily', label: 'Daily' },
-                  { value: 'weekly', label: 'Weekly' },
-                  { value: 'monthly', label: 'Monthly' },
-                  { value: 'yearly', label: 'Yearly' },
+                  { value: "daily", label: "Daily" },
+                  { value: "weekly", label: "Weekly" },
+                  { value: "monthly", label: "Monthly" },
+                  { value: "yearly", label: "Yearly" },
                 ]}
               />
             </div>
@@ -330,14 +536,20 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
             <div>
               <label>Category</label>
               <Dropdown
-                value={rCat != null ? String(rCat) : ''}
+                value={rCat != null ? String(rCat) : ""}
                 onChange={(v) => setRCat(Number(v))}
                 placeholder="Select…"
                 options={categories
-                  .filter((c) => !c.archived && !bracketById.get(c.bracketId)?.archived)
+                  .filter(
+                    (c) =>
+                      !c.archived && !bracketById.get(c.bracketId)?.archived,
+                  )
                   .map((c) => {
                     const bracket = bracketById.get(c.bracketId);
-                    return { value: String(c.id), label: `${c.icon} ${c.name}${bracket ? ` · ${bracket.name}` : ''}` };
+                    return {
+                      value: String(c.id),
+                      label: `${c.icon} ${c.name}${bracket ? ` · ${bracket.name}` : ""}`,
+                    };
                   })}
               />
             </div>
@@ -345,76 +557,146 @@ export default function Settings({ settings, onSettingsChange }: { settings: Set
               <label>Type</label>
               <Dropdown
                 value={rType}
-                onChange={(v) => setRType(v as 'expense' | 'income')}
+                onChange={(v) => setRType(v as "expense" | "income")}
                 options={[
-                  { value: 'expense', label: 'Expense' },
-                  { value: 'income', label: 'Income' },
+                  { value: "expense", label: "Expense" },
+                  { value: "income", label: "Income" },
                 ]}
               />
             </div>
           </div>
-          <button className="btn secondary" onClick={addRecurring}>+ Add recurring item</button>
+          <button className="btn secondary" onClick={addRecurring}>
+            + Add recurring item
+          </button>
         </div>
 
         <div className="card">
           <h2>Preferences</h2>
           <label>Currency</label>
           <div className="chip-row">
-            {['₹', '$', '€', '£'].map((c) => (
-              <button key={c} className={'chip' + (settings.currency === c ? ' active' : '')} onClick={() => setCurrency(c)}>{c}</button>
+            {["₹", "$", "€", "£"].map((c) => (
+              <button
+                key={c}
+                className={"chip" + (settings.currency === c ? " active" : "")}
+                onClick={() => setCurrency(c)}
+              >
+                {c}
+              </button>
             ))}
           </div>
           <label>Theme</label>
           <div className="chip-row">
-            {(['dark', 'light', 'system'] as const).map((t) => (
-              <button key={t} className={'chip' + (settings.theme === t ? ' active' : '')} onClick={() => setTheme(t)}>{t}</button>
+            {(["dark", "light", "system"] as const).map((t) => (
+              <button
+                key={t}
+                className={"chip" + (settings.theme === t ? " active" : "")}
+                onClick={() => setTheme(t)}
+              >
+                {t}
+              </button>
             ))}
           </div>
           <label>Home-screen widget</label>
           <div className="chip-row">
-            <button className={'chip' + (!settings.hideWidgetAmounts ? ' active' : '')} onClick={() => setHideWidgetAmounts(false)}>Show amounts</button>
-            <button className={'chip' + (settings.hideWidgetAmounts ? ' active' : '')} onClick={() => setHideWidgetAmounts(true)}>Hide amounts</button>
+            <button
+              className={
+                "chip" + (!settings.hideWidgetAmounts ? " active" : "")
+              }
+              onClick={() => setHideWidgetAmounts(false)}
+            >
+              Show amounts
+            </button>
+            <button
+              className={"chip" + (settings.hideWidgetAmounts ? " active" : "")}
+              onClick={() => setHideWidgetAmounts(true)}
+            >
+              Hide amounts
+            </button>
           </div>
           <p className="muted" style={{ marginTop: 8 }}>
             {settings.hideWidgetAmounts
-              ? 'The widget shows a masked progress bar only — no figures — since it\u2019s visible on your home screen (and lock screen, if placed there) to anyone nearby.'
-              : 'The widget shows your remaining budget and spend at a glance. Turn this off if you\u2019d rather not have those figures visible on your home screen.'}
+              ? "The widget shows a masked progress bar only — no figures — since it\u2019s visible on your home screen (and lock screen, if placed there) to anyone nearby."
+              : "The widget shows your remaining budget and spend at a glance. Turn this off if you\u2019d rather not have those figures visible on your home screen."}
           </p>
           <label htmlFor="monthly-income">Monthly income</label>
-          <input id="monthly-income" type="number" inputMode="decimal" placeholder="0.00" value={incomeDraft} onChange={(e) => setIncomeDraft(e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
+          <input
+            id="monthly-income"
+            type="number"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={incomeDraft}
+            onChange={(e) => setIncomeDraft(e.target.value)}
+            onWheel={(e) => e.currentTarget.blur()}
+          />
           <p className="muted" style={{ marginTop: 8 }}>
             {Number(incomeDraft) > 0
-              ? 'Home shows this against your spending, allocations, and what\u2019s left unallocated. Your fixed income counts automatically each month — you don\u2019t need to log it as a transaction.'
-              : 'Left at 0, Home simplifies down to just your Budget total — no income or allocation tracking. Set an amount if you want the fuller picture on Home.'}
+              ? "Home shows this against your spending, allocations, and what\u2019s left unallocated. Your fixed income counts automatically each month — you don\u2019t need to log it as a transaction."
+              : "Left at 0, Home simplifies down to just your Budget total — no income or allocation tracking. Set an amount if you want the fuller picture on Home."}
           </p>
-          <button className="btn secondary" onClick={saveIncome}>Save income</button>
+          <button className="btn secondary" onClick={saveIncome}>
+            Save income
+          </button>
         </div>
 
         <div className="card">
           <h2>Your data</h2>
-          <p className="muted">Stored only in this browser, on this device. Nothing is ever sent to a server — export a backup regularly so you don't lose history if you clear browser data or switch devices.</p>
-          <button className="btn secondary" onClick={doExportJSON}>Export backup (.json)</button>
+          <p className="muted">
+            Stored only in this browser, on this device. Nothing is ever sent to
+            a server — export a backup regularly so you don't lose history if
+            you clear browser data or switch devices.
+          </p>
+          <button className="btn secondary" onClick={doExportJSON}>
+            Export backup (.json)
+          </button>
           <label htmlFor="import-file">Restore from backup</label>
-          <input id="import-file" type="file" accept="application/json" onChange={onImport} />
-          <button className="btn danger" onClick={wipeAll}>Erase all data</button>
+          <input
+            id="import-file"
+            type="file"
+            accept="application/json"
+            onChange={onImport}
+          />
+          <button className="btn danger" onClick={wipeAll}>
+            Erase all data
+          </button>
         </div>
 
         <div className="card">
           <h2>Analysis exports</h2>
-          <p className="muted">Built for Power BI, Excel, or a Python/pandas notebook — every export is a clean flat table with precomputed date fields (weekday, week, quarter, year), so no reshaping is needed before you build a report or train a model.</p>
-          <button className="btn secondary" onClick={doExportCSV}>Transactions (.csv — fact table)</button>
-          <button className="btn secondary" onClick={doExportCategoriesCSV}>Categories (.csv — dimension table)</button>
-          <button className="btn secondary" onClick={doExportBracketsCSV}>Brackets (.csv — dimension table)</button>
-          <button className="btn secondary" onClick={doExportMonthlySummaryCSV}>Monthly budget vs. actual (.csv)</button>
-          <button className="btn secondary" onClick={doExportMLDataset}>Full ML dataset (.json — all tables bundled)</button>
+          <p className="muted">
+            Built for Power BI, Excel, or a Python/pandas notebook — every
+            export is a clean flat table with precomputed date fields (weekday,
+            week, quarter, year), so no reshaping is needed before you build a
+            report or train a model.
+          </p>
+          <button className="btn secondary" onClick={doExportCSV}>
+            Transactions (.csv — fact table)
+          </button>
+          <button className="btn secondary" onClick={doExportCategoriesCSV}>
+            Categories (.csv — dimension table)
+          </button>
+          <button className="btn secondary" onClick={doExportBracketsCSV}>
+            Brackets (.csv — dimension table)
+          </button>
+          <button className="btn secondary" onClick={doExportMonthlySummaryCSV}>
+            Monthly budget vs. actual (.csv)
+          </button>
+          <button className="btn secondary" onClick={doExportMLDataset}>
+            Full ML dataset (.json — all tables bundled)
+          </button>
           <p className="muted" style={{ marginTop: 12 }}>
-            In Power BI: Get Data → Text/CSV for each file, then relate Transactions to Categories on <code>CategoryId</code>. See <code>DATA_SCHEMA.md</code> in the project source for full field definitions.
+            In Power BI: Get Data → Text/CSV for each file, then relate
+            Transactions to Categories on <code>CategoryId</code>. See{" "}
+            <code>DATA_SCHEMA.md</code> in the project source for full field
+            definitions.
           </p>
         </div>
 
         <div className="card">
           <h2>About</h2>
-          <p className="muted">Personal Finance OS — zero login, zero ads, zero subscription, zero analytics, zero tracking. Installable to your home screen and fully usable offline.</p>
+          <p className="muted">
+            Money Mate — zero login, zero ads, zero subscription. Installable to
+            your home screen and fully usable offline.
+          </p>
         </div>
       </div>
     </>

@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import Dashboard from './Dashboard';
-import { db } from '../db/db';
-import { fmtMoney, monthKey, todayISO } from '../lib/format';
+import { describe, it, expect, beforeEach } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import Dashboard from "./Dashboard";
+import { db, computeMonthSummary } from "../db/db";
+import { fmtMoney, monthKey, todayISO } from "../lib/format";
 
 // Each test gets a clean database — fake-indexeddb persists across tests
 // within a run otherwise, which would let state leak between cases.
@@ -23,93 +23,205 @@ function renderDashboard() {
   );
 }
 
-async function makeBracket(kind: 'spend' | 'allocation' | 'income', name = 'Expenditure') {
-  return db.brackets.add({ name, icon: '💳', color: '#7C93F0', kind });
+async function makeBracket(
+  kind: "spend" | "allocation" | "income",
+  name = "Expenditure",
+) {
+  return db.brackets.add({ name, icon: "💳", color: "#7C93F0", kind });
 }
 
-describe('Dashboard — budget cap scoping', () => {
-  it('excludes allocation-category transactions (Savings) from Spent/Remaining, counting only spend-category transactions', async () => {
+describe("Dashboard — budget cap scoping", () => {
+  it("excludes allocation-category transactions (Savings) from Spent/Remaining, counting only spend-category transactions", async () => {
     const thisMonthDate = `${monthKey(todayISO())}-15`;
-    const expenditureId = await makeBracket('spend', 'Expenditure');
-    const savingsBracketId = await makeBracket('allocation', 'Savings');
-    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
-    const savingsId = await db.categories.add({ name: 'Savings', icon: '💰', color: '#4FD9B8', budget: 5000, bracketId: savingsBracketId });
+    const expenditureId = await makeBracket("spend", "Expenditure");
+    const savingsBracketId = await makeBracket("allocation", "Savings");
+    const rentId = await db.categories.add({
+      name: "Rent",
+      icon: "🏠",
+      color: "#F0B94D",
+      budget: 20000,
+      bracketId: expenditureId,
+    });
+    const savingsId = await db.categories.add({
+      name: "Savings",
+      icon: "💰",
+      color: "#4FD9B8",
+      budget: 5000,
+      bracketId: savingsBracketId,
+    });
 
-    await db.transactions.add({ type: 'expense', amount: 8000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
+    await db.transactions.add({
+      type: "expense",
+      amount: 8000,
+      categoryId: rentId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
     // A transfer into Savings — real money moved, but not spend against the cap.
-    await db.transactions.add({ type: 'expense', amount: 5000, categoryId: savingsId, date: thisMonthDate, createdAt: Date.now() });
+    await db.transactions.add({
+      type: "expense",
+      amount: 5000,
+      categoryId: savingsId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
 
     renderDashboard();
 
     // "Spent" must reflect only the Rent transaction (8000), not 8000+5000.
     // (The figure also appears in the "Budget health" copy below the ring,
     // hence AllBy rather than By.)
-    expect((await screen.findAllByText(fmtMoney(8000, '₹'))).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(8000, "₹"))).length,
+    ).toBeGreaterThan(0);
     // "Remaining" = budget cap (20000, Savings' target excluded) − spent (8000).
-    expect((await screen.findAllByText(fmtMoney(12000, '₹'))).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(12000, "₹"))).length,
+    ).toBeGreaterThan(0);
 
     // Savings never appears in the "By category" budget list — though it
     // legitimately still shows up further down in "Recent transactions"
     // (the transfer really happened, it's just not counted against the cap),
     // so this scopes the check to the By category card specifically.
-    const byCategoryHeading = screen.getByText('By category');
-    const byCategoryCard = byCategoryHeading.closest('.card') as HTMLElement;
-    expect(within(byCategoryCard).queryByText('Savings')).not.toBeInTheDocument();
-    expect(within(byCategoryCard).getByText('Rent')).toBeInTheDocument();
+    const byCategoryHeading = screen.getByText("By category");
+    const byCategoryCard = byCategoryHeading.closest(".card") as HTMLElement;
+    expect(
+      within(byCategoryCard).queryByText("Savings"),
+    ).not.toBeInTheDocument();
+    expect(within(byCategoryCard).getByText("Rent")).toBeInTheDocument();
   });
 
-  it('still counts a spend-category transaction normally when there are no allocation categories at all', async () => {
+  it("still counts a spend-category transaction normally when there are no allocation categories at all", async () => {
     const thisMonthDate = `${monthKey(todayISO())}-15`;
-    const expenditureId = await makeBracket('spend', 'Expenditure');
-    const foodId = await db.categories.add({ name: 'Food', icon: '🍲', color: '#6FC98A', budget: 10000, bracketId: expenditureId });
-    await db.transactions.add({ type: 'expense', amount: 3000, categoryId: foodId, date: thisMonthDate, createdAt: Date.now() });
+    const expenditureId = await makeBracket("spend", "Expenditure");
+    const foodId = await db.categories.add({
+      name: "Food",
+      icon: "🍲",
+      color: "#6FC98A",
+      budget: 10000,
+      bracketId: expenditureId,
+    });
+    await db.transactions.add({
+      type: "expense",
+      amount: 3000,
+      categoryId: foodId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
 
     renderDashboard();
 
-    expect((await screen.findAllByText(fmtMoney(3000, '₹'))).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText(fmtMoney(7000, '₹'))).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(3000, "₹"))).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(7000, "₹"))).length,
+    ).toBeGreaterThan(0);
   });
 
   it('aggregates across multiple spend-kind brackets, not just one hardcoded "Expenditure"', async () => {
     const thisMonthDate = `${monthKey(todayISO())}-15`;
-    const expenditureId = await makeBracket('spend', 'Expenditure');
-    const workId = await makeBracket('spend', 'Work Expenses');
-    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
-    const travelId = await db.categories.add({ name: 'Travel', icon: '✈️', color: '#F0A83E', budget: 5000, bracketId: workId });
-    await db.transactions.add({ type: 'expense', amount: 8000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
-    await db.transactions.add({ type: 'expense', amount: 2000, categoryId: travelId, date: thisMonthDate, createdAt: Date.now() });
-
-    renderDashboard();
-
-    expect((await screen.findAllByText(fmtMoney(10000, '₹'))).length).toBeGreaterThan(0); // total spent
-    expect((await screen.findAllByText(fmtMoney(25000, '₹'))).length).toBeGreaterThan(0); // total budget cap
-  });
-
-  it('never shows an Income tile or any income-derived figure, since Budget only knows about the spending cap', async () => {
-    const thisMonthDate = `${monthKey(todayISO())}-15`;
-    const expenditureId = await makeBracket('spend', 'Expenditure');
-    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
-    await db.transactions.add({ type: 'expense', amount: 8000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
-
-    renderDashboard();
-
-    expect(await screen.findByText('Budgeted')).toBeInTheDocument();
-    expect(screen.queryByText('Income')).not.toBeInTheDocument();
-  });
-
-  it('excludes an archived category\'s budget from the total cap, matching Home and BracketDetail', async () => {
-    const thisMonthDate = `${monthKey(todayISO())}-15`;
-    const expenditureId = await makeBracket('spend', 'Expenditure');
-    const rentId = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 20000, bracketId: expenditureId });
-    const oldGymId = await db.categories.add({
-      name: 'Gym (old)', icon: '🏋️', color: '#F0B94D', budget: 3000, bracketId: expenditureId, archived: true,
+    const expenditureId = await makeBracket("spend", "Expenditure");
+    const workId = await makeBracket("spend", "Work Expenses");
+    const rentId = await db.categories.add({
+      name: "Rent",
+      icon: "🏠",
+      color: "#F0B94D",
+      budget: 20000,
+      bracketId: expenditureId,
+    });
+    const travelId = await db.categories.add({
+      name: "Travel",
+      icon: "✈️",
+      color: "#F0A83E",
+      budget: 5000,
+      bracketId: workId,
+    });
+    await db.transactions.add({
+      type: "expense",
+      amount: 8000,
+      categoryId: rentId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
+    await db.transactions.add({
+      type: "expense",
+      amount: 2000,
+      categoryId: travelId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
     });
 
-    await db.transactions.add({ type: 'expense', amount: 8000, categoryId: rentId, date: thisMonthDate, createdAt: Date.now() });
+    renderDashboard();
+
+    expect(
+      (await screen.findAllByText(fmtMoney(10000, "₹"))).length,
+    ).toBeGreaterThan(0); // total spent
+    expect(
+      (await screen.findAllByText(fmtMoney(25000, "₹"))).length,
+    ).toBeGreaterThan(0); // total budget cap
+  });
+
+  it("never shows an Income tile or any income-derived figure, since Budget only knows about the spending cap", async () => {
+    const thisMonthDate = `${monthKey(todayISO())}-15`;
+    const expenditureId = await makeBracket("spend", "Expenditure");
+    const rentId = await db.categories.add({
+      name: "Rent",
+      icon: "🏠",
+      color: "#F0B94D",
+      budget: 20000,
+      bracketId: expenditureId,
+    });
+    await db.transactions.add({
+      type: "expense",
+      amount: 8000,
+      categoryId: rentId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText("Budgeted")).toBeInTheDocument();
+    expect(screen.queryByText("Income")).not.toBeInTheDocument();
+  });
+
+  it("excludes an archived category's budget from the total cap, matching Home and BracketDetail", async () => {
+    const thisMonthDate = `${monthKey(todayISO())}-15`;
+    const expenditureId = await makeBracket("spend", "Expenditure");
+    const rentId = await db.categories.add({
+      name: "Rent",
+      icon: "🏠",
+      color: "#F0B94D",
+      budget: 20000,
+      bracketId: expenditureId,
+    });
+    const oldGymId = await db.categories.add({
+      name: "Gym (old)",
+      icon: "🏋️",
+      color: "#F0B94D",
+      budget: 3000,
+      bracketId: expenditureId,
+      archived: true,
+    });
+
+    await db.transactions.add({
+      type: "expense",
+      amount: 8000,
+      categoryId: rentId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
     // Historical spend against the now-archived category should still
     // count as spend this month — archiving stops future budgeting, it
     // doesn't erase what already happened.
-    await db.transactions.add({ type: 'expense', amount: 1000, categoryId: oldGymId, date: thisMonthDate, createdAt: Date.now() });
+    await db.transactions.add({
+      type: "expense",
+      amount: 1000,
+      categoryId: oldGymId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
 
     renderDashboard();
 
@@ -117,11 +229,76 @@ describe('Dashboard — budget cap scoping', () => {
     // budget must not still be counted (previously it was, unlike Home
     // and BracketDetail which already excluded archived categories).
     // Spent: 8000 + 1000 = 9000. Remaining: 20000 − 9000 = 11000.
-    expect((await screen.findAllByText(fmtMoney(9000, '₹'))).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText(fmtMoney(11000, '₹'))).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(9000, "₹"))).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(11000, "₹"))).length,
+    ).toBeGreaterThan(0);
 
-    const byCategoryHeading = screen.getByText('By category');
-    const byCategoryCard = byCategoryHeading.closest('.card') as HTMLElement;
-    expect(within(byCategoryCard).queryByText('Gym (old)')).not.toBeInTheDocument();
+    const byCategoryHeading = screen.getByText("By category");
+    const byCategoryCard = byCategoryHeading.closest(".card") as HTMLElement;
+    expect(
+      within(byCategoryCard).queryByText("Gym (old)"),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("Dashboard — top-line figures are computeMonthSummary(), not a second copy of the same math", () => {
+  it("renders exactly what computeMonthSummary() returns for the same data, so the two can't silently drift apart", async () => {
+    const expenditureId = await makeBracket("spend", "Expenditure");
+    const savingsId = await makeBracket("allocation", "Savings");
+    const rentId = await db.categories.add({
+      name: "Rent",
+      icon: "🏠",
+      color: "#F0B94D",
+      budget: 15000,
+      bracketId: expenditureId,
+    });
+    const savingsCatId = await db.categories.add({
+      name: "Savings",
+      icon: "💰",
+      color: "#4FD9B8",
+      budget: 5000,
+      bracketId: savingsId,
+    });
+    const thisMonthDate = `${monthKey(todayISO())}-10`;
+    await db.transactions.add({
+      type: "expense",
+      amount: 6000,
+      categoryId: rentId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
+    // Money moved into Savings — must not count as "Spent" on Budget.
+    await db.transactions.add({
+      type: "expense",
+      amount: 5000,
+      categoryId: savingsCatId,
+      date: thisMonthDate,
+      createdAt: Date.now(),
+    });
+
+    const summary = await computeMonthSummary();
+
+    renderDashboard();
+
+    expect(
+      (await screen.findAllByText(fmtMoney(summary.budget, "₹"))).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(summary.spent, "₹"))).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText(fmtMoney(summary.remaining, "₹"))).length,
+    ).toBeGreaterThan(0);
+    // Pin the actual values too, so this test still means something if
+    // computeMonthSummary itself ever regresses rather than just Dashboard
+    // silently matching whatever it (possibly wrongly) returns.
+    expect(summary).toMatchObject({
+      budget: 15000,
+      spent: 6000,
+      remaining: 9000,
+    });
   });
 });
