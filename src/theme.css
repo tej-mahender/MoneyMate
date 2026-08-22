@@ -2,38 +2,34 @@
 [data-theme="dark"] {
   /* Base — near-black with a whisper of teal, sampled from the splash background (~#002220–#012526) */
   --void: #041412;
-  --void-elev: #0a1e19;
+  --void-elev: #0A1E19;
   --surface: rgba(255, 255, 255, 0.045);
   --surface-strong: rgba(255, 255, 255, 0.075);
   --surface-border: rgba(255, 255, 255, 0.09);
   --surface-border-strong: rgba(255, 255, 255, 0.16);
 
   /* Ink */
-  --ink: #f2f7f5;
-  --ink-soft: #9fb3ae;
-  --ink-faint: #5c6f6a;
+  --ink: #F2F7F5;
+  --ink-soft: #9FB3AE;
+  --ink-faint: #5C6F6A;
 
   /* "Money" signature gradient + solids — sampled directly from the icon mark
      (--gold/--rose/--aurum names kept as-is for drop-in compatibility with
      every component that references them; only the values changed) */
-  --gold: #56f29a;
-  --rose: #02916d;
+  --gold: #56F29A;
+  --rose: #02916D;
   --aurum: linear-gradient(135deg, var(--gold) 0%, var(--rose) 100%);
-  --aurum-soft: linear-gradient(
-    135deg,
-    rgba(86, 242, 154, 0.16) 0%,
-    rgba(2, 145, 109, 0.16) 100%
-  );
+  --aurum-soft: linear-gradient(135deg, rgba(86, 242, 154, 0.16) 0%, rgba(2, 145, 109, 0.16) 100%);
 
   /* Semantic — "good" deliberately shifted off the brand hue (true green,
      ~142°) vs. the brand's teal-emerald (~165°), so a status color doesn't
      read as identical to brand chrome. Warn/over unchanged — already
      maximally distant from green, which matters more now, not less. */
-  --good: #22c55e;
+  --good: #22C55E;
   --good-bg: rgba(34, 197, 94, 0.12);
-  --warn: #f0a83e;
+  --warn: #F0A83E;
   --warn-bg: rgba(240, 168, 62, 0.12);
-  --over: #ff6b6b;
+  --over: #FF6B6B;
   --over-bg: rgba(255, 107, 107, 0.12);
 
   /* Type — unchanged; see handoff notes on the wordmark's rounded sans not
@@ -42,46 +38,38 @@
   --sans: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  --shadow-card:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 20px 40px -16px rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 40px -16px rgba(0, 0, 0, 0.55);
   --shadow-glow-gold: 0 8px 24px -6px rgba(86, 242, 154, 0.45);
   --glass-blur: blur(20px) saturate(150%);
   color-scheme: dark;
 }
 
 [data-theme="light"] {
-  --void: #f4faf7;
-  --void-elev: #ffffff;
+  --void: #F4FAF7;
+  --void-elev: #FFFFFF;
   --surface: rgba(255, 255, 255, 0.6);
   --surface-strong: rgba(255, 255, 255, 0.85);
   --surface-border: rgba(11, 31, 27, 0.08);
   --surface-border-strong: rgba(11, 31, 27, 0.14);
 
-  --ink: #0b1f1b;
-  --ink-soft: #5c736c;
-  --ink-faint: #96a69f;
+  --ink: #0B1F1B;
+  --ink-soft: #5C736C;
+  --ink-faint: #96A69F;
 
-  --gold: #34c97f;
-  --rose: #027a5c;
+  --gold: #34C97F;
+  --rose: #027A5C;
   --aurum: linear-gradient(135deg, var(--gold) 0%, var(--rose) 100%);
-  --aurum-soft: linear-gradient(
-    135deg,
-    rgba(52, 201, 127, 0.12) 0%,
-    rgba(2, 122, 92, 0.12) 100%
-  );
+  --aurum-soft: linear-gradient(135deg, rgba(52, 201, 127, 0.12) 0%, rgba(2, 122, 92, 0.12) 100%);
 
-  --good: #16a34a;
-  --good-bg: rgba(22, 163, 74, 0.1);
-  --warn: #b3781e;
-  --warn-bg: rgba(179, 120, 30, 0.1);
-  --over: #c0433f;
-  --over-bg: rgba(192, 67, 63, 0.1);
+  --good: #16A34A;
+  --good-bg: rgba(22, 163, 74, 0.10);
+  --warn: #B3781E;
+  --warn-bg: rgba(179, 120, 30, 0.10);
+  --over: #C0433F;
+  --over-bg: rgba(192, 67, 63, 0.10);
 
-  --shadow-card:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 16px 32px -18px rgba(11, 31, 27, 0.18);
-  --shadow-glow-gold: 0 8px 20px -8px rgba(2, 122, 92, 0.3);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 16px 32px -18px rgba(11, 31, 27, 0.18);
+  --shadow-glow-gold: 0 8px 20px -8px rgba(2, 122, 92, 0.30);
   --glass-blur: blur(16px) saturate(140%);
   color-scheme: light;
 }
@@ -102,16 +90,8 @@ body {
   margin: 0;
   background: var(--void);
   background-image:
-    radial-gradient(
-      ellipse 700px 420px at 12% -10%,
-      rgba(240, 185, 77, 0.09),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 640px 480px at 100% 12%,
-      rgba(232, 97, 140, 0.07),
-      transparent 55%
-    );
+    radial-gradient(ellipse 700px 420px at 12% -10%, rgba(240, 185, 77, 0.09), transparent 60%),
+    radial-gradient(ellipse 640px 480px at 100% 12%, rgba(232, 97, 140, 0.07), transparent 55%);
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--sans);
@@ -156,7 +136,7 @@ button:focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   position: relative;
-  padding-bottom: calc(94px + env(safe-area-inset-bottom));
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
 }
 
 .topbar {
@@ -173,7 +153,7 @@ button:focus:not(:focus-visible) {
 .topbar .eyebrow {
   font-family: var(--mono);
   font-size: 10.5px;
-  letter-spacing: 0.16em;
+  letter-spacing: .16em;
   text-transform: uppercase;
   background: var(--aurum);
   -webkit-background-clip: text;
@@ -215,7 +195,7 @@ button:focus:not(:focus-visible) {
   -webkit-backdrop-filter: var(--glass-blur);
   padding: 20px;
   margin-bottom: 16px;
-  animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: rise .45s cubic-bezier(.16, 1, .3, 1) both;
 }
 
 @keyframes rise {
@@ -253,7 +233,7 @@ button:focus:not(:focus-visible) {
   margin-bottom: 16px;
 }
 
-.grid-3 > div {
+.grid-3>div {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: 16px;
@@ -266,7 +246,7 @@ button:focus:not(:focus-visible) {
 .grid-3 .label {
   font-family: var(--mono);
   font-size: 9.5px;
-  letter-spacing: 0.1em;
+  letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--ink-faint);
   margin-bottom: 7px;
@@ -298,11 +278,11 @@ button:focus:not(:focus-visible) {
   padding: 13px 0;
   border-bottom: 1px solid var(--surface-border);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity .15s;
 }
 
 .cat-row:active {
-  opacity: 0.7;
+  opacity: .7;
 }
 
 .cat-row:last-child {
@@ -351,15 +331,11 @@ button:focus:not(:focus-visible) {
 .bar-fill {
   height: 100%;
   border-radius: 6px;
-  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width .5s cubic-bezier(.16, 1, .3, 1);
 }
 
 .bar-fill.good {
-  background: linear-gradient(
-    90deg,
-    var(--good),
-    color-mix(in srgb, var(--good) 70%, white)
-  );
+  background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 70%, white));
 }
 
 .bar-fill.warn {
@@ -382,7 +358,7 @@ label {
   font-family: var(--mono);
   font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: .09em;
   color: var(--ink-faint);
   margin: 15px 0 7px;
   font-weight: 700;
@@ -392,10 +368,10 @@ label:first-child {
   margin-top: 0;
 }
 
-input[type="text"],
-input[type="number"],
-input[type="date"],
-input[type="time"],
+input[type=text],
+input[type=number],
+input[type=date],
+input[type=time],
 select,
 textarea {
   width: 100%;
@@ -407,9 +383,7 @@ textarea {
   font-size: 15.5px;
   font-family: var(--sans);
   font-weight: 500;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
+  transition: border-color .15s, box-shadow .15s;
 }
 
 input:focus,
@@ -417,9 +391,7 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: transparent;
-  box-shadow:
-    0 0 0 2px var(--void),
-    0 0 0 4px var(--gold);
+  box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
 }
 
 .row2 {
@@ -452,14 +424,11 @@ textarea:focus {
   border-radius: 15px;
   border: none;
   background: var(--aurum);
-  color: #02291d;
+  color: #02291D;
   cursor: pointer;
   margin-top: 18px;
   box-shadow: var(--shadow-glow-gold);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    filter 0.15s ease;
+  transition: transform .12s ease, box-shadow .12s ease, filter .15s ease;
 }
 
 .btn:hover {
@@ -472,7 +441,7 @@ textarea:focus {
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: .5;
   cursor: default;
   transform: none;
 }
@@ -530,9 +499,7 @@ textarea:focus {
   font-weight: 500;
   cursor: pointer;
   text-align: left;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
+  transition: border-color .15s, box-shadow .15s;
 }
 
 .dropdown-trigger span {
@@ -547,9 +514,7 @@ textarea:focus {
 
 .dropdown-trigger[aria-expanded="true"] {
   border-color: transparent;
-  box-shadow:
-    0 0 0 2px var(--void),
-    0 0 0 4px var(--gold);
+  box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
 }
 
 .dropdown-panel {
@@ -601,9 +566,7 @@ textarea:focus {
   font-weight: 500;
   color: var(--ink-soft);
   cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
+  transition: background .12s, color .12s;
 }
 
 .dropdown-option span {
@@ -639,11 +602,11 @@ textarea:focus {
   border-bottom: 1px solid var(--surface-border);
 }
 
-.cat-edit-row input[type="text"] {
+.cat-edit-row input[type=text] {
   flex: 2;
 }
 
-.cat-edit-row input[type="number"] {
+.cat-edit-row input[type=number] {
   flex: 1;
 }
 
@@ -766,7 +729,7 @@ textarea:focus {
   font-size: 17px;
   padding: 6px 0;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background .12s;
 }
 
 .icon-picker-emoji:hover {
@@ -788,9 +751,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  transition:
-    background 0.15s,
-    color 0.15s;
+  transition: background .15s, color .15s;
 }
 
 .icon-btn:hover {
@@ -821,7 +782,7 @@ textarea:focus {
   padding-left: 10px;
   padding-right: 10px;
   margin: 0 -10px;
-  transition: background 0.12s;
+  transition: background .12s;
 }
 
 .tx-link:hover {
@@ -900,7 +861,7 @@ textarea:focus {
 .empty .glyph {
   font-size: 30px;
   margin-bottom: 12px;
-  opacity: 0.55;
+  opacity: .55;
   display: flex;
   justify-content: center;
 }
@@ -922,13 +883,13 @@ textarea:focus {
   background: var(--surface);
   color: var(--ink-soft);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all .15s ease;
 }
 
 .chip.active {
   background: var(--aurum);
   border-color: transparent;
-  color: #02291d;
+  color: #02291D;
   font-weight: 700;
   box-shadow: var(--shadow-glow-gold);
 }
@@ -963,9 +924,7 @@ textarea:focus {
   border-radius: 24px;
   display: flex;
   padding: 7px;
-  box-shadow:
-    0 20px 40px -12px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   pointer-events: auto;
 }
 
@@ -984,14 +943,14 @@ textarea:focus {
   font-family: var(--sans);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: .01em;
   color: var(--ink-faint);
-  transition: color 0.2s ease;
+  transition: color .2s ease;
   border-radius: 17px;
 }
 
 .nav-item.active {
-  color: #02291d;
+  color: #02291D;
 }
 
 .nav-item .nav-icon {
@@ -1017,12 +976,10 @@ textarea:focus {
   height: 58px;
   border-radius: 19px;
   background: var(--aurum);
-  color: #02291d;
+  color: #02291D;
   border: none;
   cursor: pointer;
-  box-shadow:
-    var(--shadow-glow-gold),
-    0 12px 28px -8px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-glow-gold), 0 12px 28px -8px rgba(0, 0, 0, 0.5);
   z-index: 35;
   display: flex;
   align-items: center;
@@ -1058,12 +1015,7 @@ textarea:focus {
 }
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--surface) 25%,
-    var(--surface-strong) 50%,
-    var(--surface) 75%
-  );
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-strong) 50%, var(--surface) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
   border-radius: 16px;
@@ -1124,7 +1076,7 @@ textarea:focus {
   height: 6px;
   border-radius: 50%;
   background: var(--surface-border-strong);
-  transition: all 0.25s;
+  transition: all .25s;
 }
 
 .onboard-steps span.active {
@@ -1142,16 +1094,8 @@ textarea:focus {
   min-height: 100dvh;
   overflow-x: hidden;
   background:
-    radial-gradient(
-      ellipse 520px 380px at 50% 22%,
-      rgba(86, 242, 154, 0.16),
-      transparent 62%
-    ),
-    radial-gradient(
-      ellipse 480px 420px at 90% 5%,
-      rgba(2, 145, 109, 0.14),
-      transparent 60%
-    ),
+    radial-gradient(ellipse 520px 380px at 50% 22%, rgba(86, 242, 154, 0.16), transparent 62%),
+    radial-gradient(ellipse 480px 420px at 90% 5%, rgba(2, 145, 109, 0.14), transparent 60%),
     var(--void);
 }
 
@@ -1182,8 +1126,22 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: calc(env(safe-area-inset-top) + 56px) 24px 40px;
+  padding: calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);
   text-align: center;
+}
+
+/* Everything above the CTA centers within its own space, rather than the
+   whole hero (including the "Get started" button) centering as one block —
+   that made the button drift up into the middle of the screen instead of
+   staying anchored near the bottom, thumb-reachable, like the original
+   design intent. */
+.splash-hero .hero-content {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .splash-hero .icon-mark {
@@ -1215,7 +1173,7 @@ textarea:focus {
 .splash-hero .tagline {
   font-family: var(--mono);
   font-size: 12.5px;
-  letter-spacing: 0.08em;
+  letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-soft);
   margin: 0 0 28px;
@@ -1239,8 +1197,7 @@ textarea:focus {
   gap: 28px;
   align-items: center;
   justify-content: center;
-  margin-bottom: auto;
-  padding-bottom: 40px;
+  margin-bottom: 34px;
 }
 
 .splash-hero .trust-icons .ti {
@@ -1269,6 +1226,7 @@ textarea:focus {
   flex: 1;
   padding: 20px 16px 100px;
 }
+
 
 .ring-wrap {
   display: flex;
@@ -1299,9 +1257,11 @@ textarea:focus {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width:480px) {
+
   .splash-hero {
-    padding: calc(env(safe-area-inset-top) + 32px) 20px 20px;
+    padding:
+      calc(env(safe-area-inset-top) + 32px) 20px 20px;
   }
 
   .splash-hero .icon-mark {
@@ -1311,4 +1271,5 @@ textarea:focus {
   .splash-hero .trust-icons {
     padding-bottom: 20px;
   }
+
 }

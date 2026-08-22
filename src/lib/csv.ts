@@ -228,15 +228,33 @@ export async function exportFullBackup(): Promise<string> {
 }
 
 export async function importFullBackup(json: string) {
-  const data = JSON.parse(json);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    // Not valid JSON at all (e.g. the person picked the wrong file) —
+    // this should read the same as any other malformed backup, not surface
+    // a raw "Unexpected token" parser error that means nothing to them.
+    throw new Error("Invalid backup file");
+  }
   if (
-    !data ||
-    typeof data !== "object" ||
-    !Array.isArray(data.categories) ||
-    !Array.isArray(data.transactions)
+    !parsed ||
+    typeof parsed !== "object" ||
+    !Array.isArray((parsed as Record<string, unknown>).categories) ||
+    !Array.isArray((parsed as Record<string, unknown>).transactions)
   ) {
     throw new Error("Invalid backup file");
   }
+  // Narrowed and validated above — safe to treat as the expected shape for
+  // the rest of this function.
+  const data = parsed as {
+    schemaVersion?: number;
+    categories: unknown[];
+    transactions: unknown[];
+    brackets?: unknown[];
+    recurring?: unknown[];
+    settings?: unknown;
+  };
 
   // A backup written by a newer app version might use a data shape this
   // version doesn't understand yet — refuse rather than silently importing
