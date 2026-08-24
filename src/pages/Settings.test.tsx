@@ -180,13 +180,15 @@ describe("Settings — export/import backup, end to end through the real UI", ()
       "Restore from backup",
     ) as HTMLInputElement;
 
-    // The real handler shows a confirm() dialog before restoring — auto-accept it.
-    const originalConfirm = window.confirm;
-    window.confirm = () => true;
+    // The real handler uses the custom showConfirm() from the UI store
+    // instead of window.confirm() — mock it to auto-accept.
+    const { useUIStore } = await import("../store/useUIStore");
+    const originalShowConfirm = useUIStore.getState().showConfirm;
+    useUIStore.setState({ showConfirm: async () => true });
     try {
       await user.upload(fileInput, backupFile);
     } finally {
-      window.confirm = originalConfirm;
+      useUIStore.setState({ showConfirm: originalShowConfirm });
     }
 
     await screen.findByText("Backup restored.");

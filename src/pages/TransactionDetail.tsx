@@ -10,6 +10,7 @@ export default function TransactionDetail({ currency }: { currency: string }) {
   const txId = Number(id);
   const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
+  const showConfirm = useUIStore((s) => s.showConfirm);
 
   // useLiveQuery re-runs automatically if the transaction is edited or
   // deleted elsewhere while this page is open, instead of showing stale data.
@@ -25,7 +26,14 @@ export default function TransactionDetail({ currency }: { currency: string }) {
 
   async function handleDelete() {
     if (!t) return;
-    if (!confirm("Delete this transaction? This can't be undone.")) return;
+    const confirmed = await showConfirm({
+      title: "Delete transaction?",
+      message: "This can't be undone.",
+      confirmLabel: "Delete",
+      cancelLabel: "Keep it",
+      danger: true,
+    });
+    if (!confirmed) return;
     await db.transactions.delete(t.id!);
     showToast("Transaction deleted.");
     navigate("/history");

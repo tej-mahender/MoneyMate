@@ -53,6 +53,7 @@ export default function Settings({
 }) {
   const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
+  const showConfirm = useUIStore((s) => s.showConfirm);
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
   const recurring = useLiveQuery(() => db.recurring.toArray(), []) ?? [];
@@ -224,11 +225,14 @@ export default function Settings({
   async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (
-      !confirm(
-        "Restoring a backup replaces every category, transaction, and recurring item currently on this device. This can't be undone. Continue?",
-      )
-    ) {
+    const confirmed = await showConfirm({
+      title: "Restore backup?",
+      message: "This replaces every category, transaction, and recurring item currently on this device. This can't be undone.",
+      confirmLabel: "Restore",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!confirmed) {
       e.target.value = "";
       return;
     }
@@ -248,11 +252,14 @@ export default function Settings({
     e.target.value = "";
   }
   async function wipeAll() {
-    if (
-      !confirm(
-        "This deletes every category, transaction, and recurring item on this device. This can't be undone. Continue?",
-      )
-    )
+    const confirmed = await showConfirm({
+      title: "Erase all data?",
+      message: "This deletes every category, transaction, and recurring item on this device. This can't be undone.",
+      confirmLabel: "Erase everything",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!confirmed)
       return;
     await db.transaction(
       "rw",

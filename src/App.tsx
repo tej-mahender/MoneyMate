@@ -17,6 +17,7 @@ import { consumePendingWidgetRoute } from "./lib/widgetBridge";
 import Overview from "./pages/Overview";
 import BottomNav from "./components/BottomNav";
 import Toast from "./components/Toast";
+import ConfirmDialog from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Code-split everything except Overview (Home), which is the landing screen
@@ -192,6 +193,7 @@ export default function App() {
         <AnimatedRoutes settings={settings} onSettingsChange={setSettings} />
         <BottomNav />
         <Toast />
+        <ConfirmDialog />
       </div>
     </HashRouter>
   );

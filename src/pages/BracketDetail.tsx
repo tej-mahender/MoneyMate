@@ -37,6 +37,7 @@ export default function BracketDetail({
   const { id } = useParams();
   const bracketId = Number(id);
   const showToast = useUIStore((s) => s.showToast);
+  const showConfirm = useUIStore((s) => s.showConfirm);
   const curMonth = monthKey(todayISO());
 
   const bracket = useLiveQuery(() => db.brackets.get(bracketId), [bracketId]);
@@ -129,11 +130,20 @@ export default function BracketDetail({
     }
     const count = await db.transactions.where("categoryId").equals(cat.id).count();
     if (count > 0) {
-      const wantsDelete = confirm(
-        `"${cat.name || "This category"}" has ${count} transaction${count === 1 ? "" : "s"} — deleting it permanently marks ${count === 1 ? "that one" : "those"} "Uncategorized".\n\nOK to delete anyway, or Cancel to archive instead (keeps your history, just hides it from new transactions).`,
-      );
+      const wantsDelete = await showConfirm({
+        title: `Delete "${cat.name || "this category"}"?`,
+        message: `It has ${count} transaction${count === 1 ? "" : "s"} — deleting it permanently marks ${count === 1 ? "that one" : "those"} "Uncategorized".\n\nAlternatively, cancel to archive instead (keeps your history, just hides it from new transactions).`,
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        danger: true,
+      });
       if (!wantsDelete) {
-        const wantsArchive = confirm(`Archive "${cat.name || "this category"}"? You can restore it later.`);
+        const wantsArchive = await showConfirm({
+          title: `Archive "${cat.name || "this category"}"?`,
+          message: "You can restore it later from Settings.",
+          confirmLabel: "Archive",
+          cancelLabel: "Cancel",
+        });
         if (!wantsArchive) return;
         await db.categories.update(cat.id, { archived: true });
         showToast(`Archived "${cat.name || "category"}".`);
@@ -215,19 +225,27 @@ export default function BracketDetail({
     const txCount = catIds.length ? await db.transactions.where("categoryId").anyOf(catIds).count() : 0;
 
     if (allCats.length > 0) {
-      const wantsDelete = confirm(
-        `"${bracket.name}" has ${allCats.length} categor${allCats.length === 1 ? "y" : "ies"}` +
+      const wantsDelete = await showConfirm({
+        title: `Delete "${bracket.name}"?`,
+        message:
+          `It has ${allCats.length} categor${allCats.length === 1 ? "y" : "ies"}` +
           (txCount > 0 ? ` and ${txCount} transaction${txCount === 1 ? "" : "s"}` : "") +
-          `. Deleting it removes the bracket and everything inside it` +
-          (txCount > 0 ? `; those transactions become "Uncategorized".` : ".") +
-          `\n\nOK to delete, or Cancel to archive instead (keeps everything, just hides it).`,
-      );
-      if (!wantsDelete) {
-        await archiveBracket();
-        return;
-      }
+          `. Deleting removes the bracket and everything inside it` +
+          (txCount > 0 ? `; those transactions become "Uncategorized".` : "."),
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        danger: true,
+      });
+      if (!wantsDelete) return;
     } else {
-      if (!confirm(`Delete the empty "${bracket.name}" bracket?`)) return;
+      const confirmed = await showConfirm({
+        title: `Delete "${bracket.name}"?`,
+        message: "This empty bracket will be permanently removed.",
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        danger: true,
+      });
+      if (!confirmed) return;
     }
 
     await db.transaction("rw", db.brackets, db.categories, async () => {
