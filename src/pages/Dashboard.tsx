@@ -13,6 +13,7 @@ import {
   iconBadgeStyle,
 } from "../lib/format";
 import CategoryRow from "../components/CategoryRow";
+import Ring from "../components/Ring";
 import { syncWidget } from "../lib/widgetBridge";
 import { Wallet, Receipt } from "lucide-react";
 
@@ -293,61 +294,5 @@ export default function Dashboard({
         </div>
       </div>
     </>
-  );
-}
-
-function Ring({ pct, color }: { pct: number; color: string }) {
-  const r = 32;
-  const c = 2 * Math.PI * r;
-  const offset = c - (Math.min(pct, 100) / 100) * c;
-  const gradId = "ring-grad-" + color.replace(/[^a-z]/gi, "");
-  return (
-    <svg width="80" height="80" viewBox="0 0 80 80" style={{ flexShrink: 0 }}>
-      <defs>
-        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop
-            offset="0%"
-            stopColor={
-              color === "over"
-                ? "var(--rose)"
-                : color === "warn"
-                  ? "var(--warn)"
-                  : "var(--good)"
-            }
-          />
-          <stop
-            offset="100%"
-            stopColor={
-              color === "over"
-                ? "var(--over)"
-                : color === "warn"
-                  ? "var(--gold)"
-                  : "var(--good)"
-            }
-          />
-        </linearGradient>
-      </defs>
-      <circle
-        cx="40"
-        cy="40"
-        r={r}
-        fill="none"
-        stroke="var(--surface-border-strong)"
-        strokeWidth="8"
-      />
-      <circle
-        cx="40"
-        cy="40"
-        r={r}
-        fill="none"
-        stroke={`url(#${gradId})`}
-        strokeWidth="8"
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={offset}
-        transform="rotate(-90 40 40)"
-        style={{ transition: "stroke-dashoffset .6s cubic-bezier(.16,1,.3,1)" }}
-      />
-    </svg>
   );
 }

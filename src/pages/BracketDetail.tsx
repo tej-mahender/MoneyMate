@@ -3,12 +3,15 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db, type Category } from "../db/db";
 import { fmtMoney, monthKey, monthLabel, todayISO } from "../lib/format";
-import { computeCatchAllAdjustment } from "../lib/budgetLogic";
+import { computeCatchAllAdjustment, progressState } from "../lib/budgetLogic";
+import Ring from "../components/Ring";
 import IconPicker from "../components/IconPicker";
-import { X, Wallet } from "lucide-react";
+import CategoryRow from "../components/CategoryRow";
+import { X, Wallet, Pencil, Archive, Trash2, Check } from "lucide-react";
 import { useUIStore } from "../store/useUIStore";
 
 const PALETTE = ["#F0B94D", "#4FD9B8", "#7C93F0", "#E8618C", "#B98CF0", "#F0A83E", "#FF6B6B", "#6FC98A"];
+
 
 /**
  * The single drill-down page for any bracket — Expenditure, Savings,
@@ -61,6 +64,18 @@ export default function BracketDetail({
   const totalSpent = [...spentByCategory.values()].reduce((s, v) => s + v, 0);
   const left = totalTarget - totalSpent;
 
+  // The ring's percentage always means "spent/logged as a share of target",
+  // but what crossing 100% *means* flips by bracket kind: for a spend cap,
+  // going over is the bad outcome (overspent) and gets the red "over"
+  // treatment. For an allocation target (Savings/Investments), going over
+  // means the target was met or exceeded — a good outcome, not a warning —
+  // so it's clamped to the same "good" state as being comfortably under,
+  // rather than reusing spend's over-budget red for what's actually a win.
+  const ringPctRaw = totalTarget > 0 ? (totalSpent / totalTarget) * 100 : 0;
+  const ringPct = Math.min(ringPctRaw, 100);
+  const ringState = progressState(ringPctRaw, bracket?.kind === "allocation");
+  const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
+
   // For the Income bracket specifically: fixed monthly income (Settings)
   // counts automatically and isn't a transaction; totalSpent here is
   // actually "logged income" since relevantTxType is 'income' for this
@@ -69,6 +84,7 @@ export default function BracketDetail({
   const totalIncomeThisMonth = monthlyIncome + loggedIncome;
 
   const [draftCats, setDraftCats] = useState<Category[]>([]);
+  const [editingCats, setEditingCats] = useState(false);
   useEffect(() => {
     setDraftCats(activeCategories);
     // Deliberately keyed on the categories' actual field values (not just
@@ -81,6 +97,10 @@ export default function BracketDetail({
     // back) forced a full remount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bracketId, JSON.stringify(activeCategories.map((c) => [c.id, c.name, c.budget, c.icon, c.color]))]);
+
+  useEffect(() => {
+    setEditingCats(false);
+  }, [bracketId]);
 
   const [bracketName, setBracketName] = useState("");
   const [bracketIcon, setBracketIcon] = useState("");
@@ -243,6 +263,42 @@ export default function BracketDetail({
         <div className="sub">{monthLabel(curMonth)}</div>
       </header>
       <div className="content">
+        {bracket.kind !== "income" && totalTarget > 0 && (
+          <div className="card bracket-hero">
+            <div className="ring-wrap">
+              <Ring pct={ringPct} color={ringState} size={96} />
+              <div className="ring-figs">
+                <div className="big" style={{ color: ringColor }}>
+                  {ringPctRaw.toFixed(0)}%
+                </div>
+                <div className="lbl">
+                  {bracket.kind === "spend"
+                    ? `of ${fmtMoney(totalTarget, currency)} budget used`
+                    : ringPctRaw >= 100
+                      ? `target met — ${fmtMoney(totalSpent, currency)} of ${fmtMoney(totalTarget, currency)}`
+                      : `of ${fmtMoney(totalTarget, currency)} target reached`}
+                </div>
+              </div>
+            </div>
+            <div className="bracket-hero-fig">
+              {bracket.kind === "spend" ? (
+                <>
+                  <span style={{ color: left < 0 ? "var(--over)" : "var(--good)" }}>
+                    {fmtMoney(Math.abs(left), currency)}
+                  </span>{" "}
+                  {left < 0 ? "over budget" : "left this month"}
+                </>
+              ) : (
+                <>
+                  <span style={{ color: left < 0 ? "var(--good)" : "var(--ink)" }}>
+                    {fmtMoney(Math.abs(left), currency)}
+                  </span>{" "}
+                  {left < 0 ? "over target — nice work" : "still to go"}
+                </>
+              )}
+            </div>
+          </div>
+        )}
         {bracket.kind === "income" ? (
           <div className="grid-3">
             <div>
@@ -276,45 +332,105 @@ export default function BracketDetail({
         )}
 
         <div className="card">
-          <h2>Categories</h2>
-          {draftCats.length === 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: activeCategories.length === 0 ? 0 : 4 }}>
+            <h2 style={{ margin: 0 }}>Categories</h2>
+            {activeCategories.length > 0 && (
+              <button
+                className="icon-btn"
+                aria-label={editingCats ? "Done editing categories" : "Edit categories"}
+                onClick={() => {
+                  if (editingCats) saveCats();
+                  setEditingCats((v) => !v);
+                }}
+              >
+                {editingCats ? <Check size={16} /> : <Pencil size={15} />}
+              </button>
+            )}
+          </div>
+
+          {activeCategories.length === 0 && !editingCats && (
             <div className="empty">
               <div className="glyph">
                 <Wallet size={30} strokeWidth={1.5} />
               </div>
-              No categories yet — add one below to start tracking within {bracket.name}.
+              No categories yet — add one to start tracking within {bracket.name}.
+              <div style={{ marginTop: 14 }}>
+                <button className="btn secondary" onClick={() => setEditingCats(true)}>
+                  <Pencil size={15} /> Add a category
+                </button>
+              </div>
             </div>
           )}
-          {draftCats.map((c, i) => (
-            <div key={c.id ?? "new-" + i} style={{ marginBottom: 8 }}>
-              <div className="cat-edit-row">
-                <IconPicker
-                  icon={c.icon}
-                  color={c.color}
-                  palette={PALETTE}
-                  onIconChange={(icon) => updateCat(i, "icon", icon)}
-                  onColorChange={(color) => updateCat(i, "color", color)}
-                />
-                <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, "name", e.target.value)} />
-                {bracket.kind !== "income" && (
-                  <input type="number" placeholder={amountLabel} value={c.budget} onChange={(e) => updateCat(i, "budget", e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
-                )}
-                <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}><X size={15} /></button>
-              </div>
-              {c.id != null && (
+
+          {!editingCats &&
+            activeCategories.map((c) =>
+              bracket.kind === "income" ? (
                 <div
-                  className="muted"
-                  style={{ fontSize: 11.5, fontFamily: "var(--mono)", paddingLeft: 40, cursor: "pointer" }}
+                  key={c.id}
+                  className="cat-row"
                   onClick={() => navigate("/history?cat=" + c.id)}
+                  style={{ paddingBottom: 13 }}
                 >
-                  {fmtMoney(spentByCategory.get(c.id) ?? 0, currency)}{" "}
-                  {bracket.kind === "income" ? "logged this month" : "spent this month"}
+                  <div className="row-top" style={{ marginBottom: 0 }}>
+                    <span className="name">
+                      <span className="icon">{c.icon}</span>
+                      {c.name}
+                    </span>
+                    <span className="figs">
+                      <b>{fmtMoney(spentByCategory.get(c.id!) ?? 0, currency)}</b> logged
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <CategoryRow
+                  key={c.id}
+                  category={c}
+                  spent={spentByCategory.get(c.id!) ?? 0}
+                  currency={currency}
+                  isAllocation={bracket.kind === "allocation"}
+                  onClick={() => navigate("/history?cat=" + c.id)}
+                />
+              ),
+            )}
+
+          {editingCats && (
+            <>
+              {draftCats.length === 0 && (
+                <div className="empty">
+                  <div className="glyph">
+                    <Wallet size={30} strokeWidth={1.5} />
+                  </div>
+                  No categories yet — add one below to start tracking within {bracket.name}.
                 </div>
               )}
-            </div>
-          ))}
-          <button className="btn secondary" onClick={addCat}>+ Add category</button>
-          <button className="btn" onClick={saveCats}>Save changes</button>
+              {draftCats.map((c, i) => (
+                <div key={c.id ?? "new-" + i} className="cat-edit-row">
+                  <IconPicker
+                    icon={c.icon}
+                    color={c.color}
+                    palette={PALETTE}
+                    onIconChange={(icon) => updateCat(i, "icon", icon)}
+                    onColorChange={(color) => updateCat(i, "color", color)}
+                  />
+                  <input type="text" placeholder="Category" value={c.name} onChange={(e) => updateCat(i, "name", e.target.value)} />
+                  {bracket.kind !== "income" && (
+                    <input type="number" placeholder={amountLabel} value={c.budget} onChange={(e) => updateCat(i, "budget", e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
+                  )}
+                  <button className="icon-btn danger" aria-label="Remove" onClick={() => removeCat(i)}><X size={15} /></button>
+                </div>
+              ))}
+              <button className="btn secondary" onClick={addCat}>+ Add category</button>
+              <button
+                className="btn"
+                onClick={() => {
+                  saveCats();
+                  setEditingCats(false);
+                }}
+              >
+                Done
+              </button>
+            </>
+          )}
         </div>
 
         {archivedCategories.length > 0 && (
@@ -341,9 +457,19 @@ export default function BracketDetail({
             />
             <input type="text" placeholder="Bracket name" value={bracketName} onChange={(e) => setBracketName(e.target.value)} style={{ flex: 1 }} />
           </div>
-          <button className="btn secondary" onClick={saveBracket}>Save bracket</button>
-          <button className="btn secondary" onClick={archiveBracket} style={{ marginTop: 8 }}>Archive bracket</button>
-          <button className="btn danger" onClick={deleteBracket}>Delete bracket</button>
+          <button className="btn secondary" onClick={saveBracket}>
+            <Pencil size={15} /> Save bracket
+          </button>
+
+          <div className="danger-zone">
+            <div className="danger-zone-label">Archive or delete this bracket</div>
+            <button className="btn secondary" onClick={archiveBracket}>
+              <Archive size={15} /> Archive bracket
+            </button>
+            <button className="btn danger" onClick={deleteBracket}>
+              <Trash2 size={15} /> Delete bracket
+            </button>
+          </div>
         </div>
       </div>
     </>
