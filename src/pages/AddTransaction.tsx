@@ -1,12 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { db, type TxType } from "../db/db";
+import { db, type TxType, type SplitShare } from "../db/db";
 import { todayISO } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
 import Dropdown from "../components/Dropdown";
+import { X, Users } from "lucide-react";
 
 const RECENT_CAT_KEY = "pfos_last_category"; // suffixed per type, e.g. `${RECENT_CAT_KEY}_expense`
+
+interface SplitPersonDraft {
+  name: string;
+  amount: string;
+}
+
+/** Splits `total` evenly across the given number of *other* people plus
+ *  yourself, folding any rounding remainder into your own share so the
+ *  numbers always sum to exactly `total` — never off by a paisa because
+ *  of division. */
+function evenSplit(
+  total: number,
+  otherCount: number,
+): { yours: number; each: number } {
+  const parties = otherCount + 1;
+  if (parties <= 1 || total <= 0) return { yours: total, each: 0 };
+  const each = Math.floor((total / parties) * 100) / 100;
+  const yours = Math.round((total - each * otherCount) * 100) / 100;
+  return { yours, each };
+}
 
 export default function AddTransaction() {
   const navigate = useNavigate();
@@ -45,21 +66,70 @@ export default function AddTransaction() {
   const [advanced, setAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Splitting only applies to expenses — logging income never needs it.
+  // `amount` above is the TOTAL you actually paid once split is on; your
+  // own share is derived (total minus everyone else's), never typed
+  // directly, so it can never silently drift out of sync with the people
+  // list. Existing split shares (if editing a past split) are matched back
+  // onto these draft rows by name when saving, so a partial repayment a
+  // friend already made isn't lost just because you corrected an amount.
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitPeople, setSplitPeople] = useState<SplitPersonDraft[]>([]);
+  const existingShares = useLiveQuery(
+    () =>
+      editId
+        ? db.splitShares.where("transactionId").equals(editId).toArray()
+        : Promise.resolve<SplitShare[]>([]),
+    [editId],
+  );
+  const knownNames = useLiveQuery(() => db.splitShares.toArray(), []);
+  const nameSuggestions = [
+    ...new Set(
+      (knownNames ?? [])
+        .slice()
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map((s) => s.personName),
+    ),
+  ].slice(0, 8);
+
   // One-time prefill once the transaction being edited has loaded — after
   // that the fields are just normal controlled state the user can change.
   const prefilled = useRef(false);
   useEffect(() => {
     if (!editingTx || prefilled.current) return;
+    // In edit mode, existingShares is a second, independent live query —
+    // wait for it to actually resolve (even to an empty array) before
+    // prefilling, since it could resolve after editingTx does. Locking in
+    // prefilled.current before that would silently skip loading split data.
+    if (editId && existingShares === undefined) return;
     prefilled.current = true;
     setType(editingTx.type);
-    setAmount(String(editingTx.amount));
     setCategoryId(editingTx.categoryId);
     setDate(editingTx.date);
     setMerchant(editingTx.merchant || "");
     setNote(editingTx.note || "");
     setPaymentMethod(editingTx.paymentMethod || "UPI");
     if (editingTx.merchant || editingTx.note) setAdvanced(true);
-  }, [editingTx]);
+
+    if (existingShares && existingShares.length > 0) {
+      // The transaction only ever stored your own share — reconstruct the
+      // original total (what actually left your hand) for the form.
+      const othersTotal = existingShares.reduce(
+        (s, sh) => s + sh.amountOwed,
+        0,
+      );
+      setAmount(String(editingTx.amount + othersTotal));
+      setSplitEnabled(true);
+      setSplitPeople(
+        existingShares.map((sh) => ({
+          name: sh.personName,
+          amount: String(sh.amountOwed),
+        })),
+      );
+    } else {
+      setAmount(String(editingTx.amount));
+    }
+  }, [editingTx, existingShares, editId]);
 
   useEffect(() => {
     // In edit mode the category comes from the transaction being edited
@@ -76,9 +146,94 @@ export default function AddTransaction() {
     setCategoryId(found ? found.id! : categories[0].id!);
   }, [type, categories.length, editId]);
 
+  // Valid split rows: a real name and a positive amount. Rows with a blank
+  // name or empty amount are just in-progress drafts, not real people yet.
+  const validSplitPeople = splitPeople
+    .map((p) => ({ name: p.name.trim(), amount: parseFloat(p.amount) || 0 }))
+    .filter((p) => p.name.length > 0 && p.amount > 0);
+  const splitOthersTotal = validSplitPeople.reduce((s, p) => s + p.amount, 0);
+  const isSplitting =
+    type === "expense" && splitEnabled && validSplitPeople.length > 0;
+  const yourShare = isSplitting
+    ? (parseFloat(amount) || 0) - splitOthersTotal
+    : parseFloat(amount) || 0;
+
+  const [splitManuallyEdited, setSplitManuallyEdited] = useState(false);
+
+  function addSplitPerson() {
+    setSplitPeople((prev) => {
+      const next = [...prev, { name: "", amount: "" }];
+      if (splitManuallyEdited) return next;
+      // Auto-divide: rebalance EVERY row together, not just fill in an
+      // amount for the newest one — otherwise adding a 3rd person would
+      // leave the first two still showing their old 2-way-split amounts,
+      // and the row totals would never actually sum to an even split.
+      const total = parseFloat(amount) || 0;
+      const { each } = evenSplit(total, next.length);
+      return next.map((p) => ({ ...p, amount: each > 0 ? String(each) : "" }));
+    });
+  }
+  function removeSplitPerson(i: number) {
+    setSplitPeople((prev) => {
+      const next = prev.filter((_, idx) => idx !== i);
+      if (splitManuallyEdited || next.length === 0) return next;
+      const total = parseFloat(amount) || 0;
+      const { each } = evenSplit(total, next.length);
+      return next.map((p) => ({ ...p, amount: each > 0 ? String(each) : "" }));
+    });
+  }
+  function updateSplitPerson(
+    i: number,
+    field: keyof SplitPersonDraft,
+    value: string,
+  ) {
+    if (field === "amount") setSplitManuallyEdited(true);
+    setSplitPeople((prev) =>
+      prev.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)),
+    );
+  }
+
+  async function reconcileSplitShares(transactionId: number) {
+    const previous = editId ? (existingShares ?? []) : [];
+    const previousByName = new Map(
+      previous.map((s) => [s.personName.toLowerCase(), s]),
+    );
+    const keepNames = new Set(
+      validSplitPeople.map((p) => p.name.toLowerCase()),
+    );
+
+    for (const old of previous) {
+      if (!keepNames.has(old.personName.toLowerCase())) {
+        await db.splitShares.delete(old.id!);
+      }
+    }
+    for (const p of validSplitPeople) {
+      const existing = previousByName.get(p.name.toLowerCase());
+      if (existing) {
+        // Preserve whatever's already been repaid — editing the split
+        // shouldn't erase a friend's partial payment. If the corrected
+        // amount is now less than what they've already paid, clamp the
+        // settled figure down rather than leave it reading as "paid more
+        // than they owed".
+        await db.splitShares.update(existing.id!, {
+          amountOwed: p.amount,
+          amountSettled: Math.min(existing.amountSettled, p.amount),
+        });
+      } else {
+        await db.splitShares.add({
+          transactionId,
+          personName: p.name,
+          amountOwed: p.amount,
+          amountSettled: 0,
+          createdAt: Date.now(),
+        });
+      }
+    }
+  }
+
   async function save(addAnother: boolean) {
-    const amt = parseFloat(amount);
-    if (!amt || amt <= 0) {
+    const totalAmt = parseFloat(amount);
+    if (!totalAmt || totalAmt <= 0) {
       showToast("Enter an amount greater than 0.");
       return;
     }
@@ -90,17 +245,25 @@ export default function AddTransaction() {
       );
       return;
     }
+    if (isSplitting && yourShare < 0) {
+      showToast("The amounts you've split add up to more than the total.");
+      return;
+    }
+    const amt = isSplitting ? yourShare : totalAmt;
     setSaving(true);
 
     if (editId) {
-      await db.transactions.update(editId, {
-        type,
-        amount: amt,
-        categoryId,
-        date,
-        merchant: merchant.trim() || undefined,
-        note: note.trim() || undefined,
-        paymentMethod,
+      await db.transaction("rw", db.transactions, db.splitShares, async () => {
+        await db.transactions.update(editId, {
+          type,
+          amount: amt,
+          categoryId,
+          date,
+          merchant: merchant.trim() || undefined,
+          note: note.trim() || undefined,
+          paymentMethod,
+        });
+        await reconcileSplitShares(editId);
       });
       setSaving(false);
       showToast("Transaction updated.");
@@ -108,26 +271,33 @@ export default function AddTransaction() {
       return;
     }
 
-    await db.transactions.add({
-      type,
-      amount: amt,
-      categoryId,
-      date,
-      merchant: merchant.trim() || undefined,
-      note: note.trim() || undefined,
-      paymentMethod,
-      createdAt: Date.now(),
+    await db.transaction("rw", db.transactions, db.splitShares, async () => {
+      const id = await db.transactions.add({
+        type,
+        amount: amt,
+        categoryId,
+        date,
+        merchant: merchant.trim() || undefined,
+        note: note.trim() || undefined,
+        paymentMethod,
+        createdAt: Date.now(),
+      });
+      if (isSplitting) await reconcileSplitShares(id);
     });
     localStorage.setItem(`${RECENT_CAT_KEY}_${type}`, String(categoryId));
     setSaving(false);
 
     showToast(
-      `Added ${amount} to ${categories.find((c) => c.id === categoryId)?.name || ""}.`,
+      isSplitting
+        ? `Added ${amt} to ${categories.find((c) => c.id === categoryId)?.name || ""} — ${splitOthersTotal} split with ${validSplitPeople.length === 1 ? validSplitPeople[0].name : `${validSplitPeople.length} people`}.`
+        : `Added ${amount} to ${categories.find((c) => c.id === categoryId)?.name || ""}.`,
     );
     if (addAnother) {
       setAmount("");
       setNote("");
       setMerchant("");
+      setSplitEnabled(false);
+      setSplitPeople([]);
     } else {
       // Spend-category transactions land on Budget (Rent/Food/etc.) for
       // immediate feedback on the category cap; allocation and income
@@ -170,7 +340,9 @@ export default function AddTransaction() {
             </button>
           </div>
 
-          <label htmlFor="amt">Amount</label>
+          <label htmlFor="amt">
+            {isSplitting ? "Total you paid" : "Amount"}
+          </label>
           <input
             id="amt"
             type="number"
@@ -181,6 +353,114 @@ export default function AddTransaction() {
             onChange={(e) => setAmount(e.target.value)}
             onWheel={(e) => e.currentTarget.blur()}
           />
+
+          {type === "expense" && (
+            <>
+              <button
+                type="button"
+                className={"chip" + (splitEnabled ? " active" : "")}
+                aria-pressed={splitEnabled}
+                onClick={() => {
+                  const turningOn = !splitEnabled;
+                  setSplitEnabled(turningOn);
+                  if (turningOn && splitPeople.length === 0) addSplitPerson();
+                  if (!turningOn) {
+                    setSplitPeople([]);
+                    setSplitManuallyEdited(false);
+                  }
+                }}
+                style={{
+                  marginTop: 14,
+                  marginBottom: splitEnabled ? 12 : 18,
+                  padding: "10px 16px",
+                }}
+              >
+                <Users size={14} />{" "}
+                {splitEnabled ? "Splitting this expense" : "Split this expense"}
+              </button>
+
+              {splitEnabled && (
+                <div
+                  className="card"
+                  style={{
+                    background: "var(--surface-2, rgba(255,255,255,0.03))",
+                    padding: 14,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div
+                    className="muted"
+                    style={{ fontSize: 12, marginBottom: 8 }}
+                  >
+                    Who else was there? Don't add yourself — your own share is
+                    worked out automatically below.
+                  </div>
+                  {splitPeople.map((p, i) => (
+                    <div
+                      key={i}
+                      className="cat-edit-row"
+                      style={{ padding: "6px 0" }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        list="split-name-suggestions"
+                        value={p.name}
+                        onChange={(e) =>
+                          updateSplitPerson(i, "name", e.target.value)
+                        }
+                      />
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        inputMode="decimal"
+                        value={p.amount}
+                        onChange={(e) =>
+                          updateSplitPerson(i, "amount", e.target.value)
+                        }
+                        onWheel={(e) => e.currentTarget.blur()}
+                      />
+                      <button
+                        className="icon-btn danger"
+                        aria-label="Remove person"
+                        onClick={() => removeSplitPerson(i)}
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                  <datalist id="split-name-suggestions">
+                    {nameSuggestions.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                  <button
+                    className="btn ghost"
+                    style={{ marginTop: 8 }}
+                    onClick={addSplitPerson}
+                  >
+                    + Add person
+                  </button>
+                  <div
+                    className="muted"
+                    style={{
+                      marginTop: 10,
+                      fontSize: 13,
+                      color: yourShare < 0 ? "var(--over)" : undefined,
+                    }}
+                  >
+                    Your share of this expense:{" "}
+                    <b style={{ fontFamily: "var(--mono)" }}>
+                      {Number.isFinite(yourShare)
+                        ? yourShare.toFixed(2)
+                        : "0.00"}
+                    </b>
+                    {yourShare < 0 && " — split amounts exceed the total"}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {categories.length === 0 ? (
             <div className="empty" style={{ padding: "20px 8px" }}>

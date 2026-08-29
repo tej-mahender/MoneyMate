@@ -35,6 +35,7 @@ const History = lazy(() => import("./pages/History"));
 const TransactionDetail = lazy(() => import("./pages/TransactionDetail"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
+const SplitTracker = lazy(() => import("./pages/SplitTracker"));
 
 function RouteFallback() {
   // Mirrors the app-shell's own initial-load skeleton so a lazy chunk
@@ -124,6 +125,10 @@ function AnimatedRoutes({
               <Route
                 path="/analytics"
                 element={<Analytics currency={settings.currency} />}
+              />
+              <Route
+                path="/owed"
+                element={<SplitTracker currency={settings.currency} />}
               />
               <Route
                 path="/settings"

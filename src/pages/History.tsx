@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useSearchParams } from "react-router-dom";
-import { db, type Transaction } from "../db/db";
+import { db, type Transaction, type SplitShare } from "../db/db";
 import {
   fmtMoney,
   monthKey,
@@ -29,7 +29,10 @@ export default function History({ currency }: { currency: string }) {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [dayFilter, setDayFilter] = useState<string | null>(null);
   const catFilter = params.get("cat") ? Number(params.get("cat")) : null;
-  const [lastDeleted, setLastDeleted] = useState<Transaction | null>(null);
+  const [lastDeleted, setLastDeleted] = useState<{
+    transaction: Transaction;
+    shares: SplitShare[];
+  } | null>(null);
 
   const months = useMemo(() => {
     const set = new Set(allTx.map((t) => monthKey(t.date)));
@@ -61,14 +64,32 @@ export default function History({ currency }: { currency: string }) {
     .reduce((s, t) => s + t.amount, 0);
 
   async function del(t: Transaction) {
-    await db.transactions.delete(t.id!);
-    setLastDeleted(t);
+    // A split expense's IOU rows point at this transaction — deleting it
+    // without them leaves debris that no longer traces back to any real
+    // expense. Captured alongside the transaction here so Undo can restore
+    // both together, not just the transaction with its split history gone.
+    const shares =
+      t.id != null
+        ? await db.splitShares.where("transactionId").equals(t.id).toArray()
+        : [];
+    await db.transaction("rw", db.transactions, db.splitShares, async () => {
+      if (shares.length)
+        await db.splitShares.bulkDelete(shares.map((s) => s.id!));
+      await db.transactions.delete(t.id!);
+    });
+    setLastDeleted({ transaction: t, shares });
     showToast("Deleted — tap Undo to restore");
   }
   async function undo() {
     if (!lastDeleted) return;
-    const { id, ...rest } = lastDeleted;
-    await db.transactions.add(rest);
+    const { transaction, shares } = lastDeleted;
+    const { id, ...rest } = transaction;
+    const newId = await db.transactions.add(rest);
+    if (shares.length) {
+      await db.splitShares.bulkAdd(
+        shares.map(({ id: _id, ...s }) => ({ ...s, transactionId: newId })),
+      );
+    }
     setLastDeleted(null);
     showToast("Restored.");
   }

@@ -7,18 +7,15 @@ import {
   type Transaction,
   type Recurring,
   type Settings,
+  type SplitShare,
 } from "../db/db";
 import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from "./format";
 
-// v5: Category.flow ('spend' | 'allocation' | 'income') was replaced by
-// Category.bracketId, referencing a new Bracket table — see db.ts. A
-// category now belongs to a bracket (Expenditure/Savings/Investments/
-// Income, or a custom one) and inherits that bracket's kind, rather than
-// carrying a flat flag itself. Older backups (schemaVersion <= 4, with no
-// `brackets` array at all) are still readable: importFullBackup()
-// synthesizes the 4 default brackets and infers each category's bracket
-// from its old flow/type/name on the way in.
-export const SCHEMA_VERSION = 5;
+// v6: adds splitShares (split-expense/IOU tracking) — see db.ts's
+// SplitShare interface. Purely additive: older backups (schemaVersion <= 5)
+// simply have no `splitShares` array at all, which importFullBackup()
+// treats as "nothing to restore for this feature", not an error.
+export const SCHEMA_VERSION = 6;
 
 /** Prevents CSV formula injection: a cell starting with =, +, -, or @ gets
  *  interpreted as a formula by Excel/Sheets when the file is opened. Prefixing
@@ -29,15 +26,23 @@ function sanitizeCsvCell(v: string): string {
 }
 
 async function loadAll() {
-  const [transactions, categories, brackets, recurring, settings] =
+  const [transactions, categories, brackets, recurring, settings, splitShares] =
     await Promise.all([
       db.transactions.toArray(),
       db.categories.toArray(),
       db.brackets.toArray(),
       db.recurring.toArray(),
       db.settings.toArray(),
+      db.splitShares.toArray(),
     ]);
-  return { transactions, categories, brackets, recurring, settings };
+  return {
+    transactions,
+    categories,
+    brackets,
+    recurring,
+    settings,
+    splitShares,
+  };
 }
 
 /** Flat, ML/BI-ready transaction records: one row per transaction with every
@@ -210,8 +215,14 @@ export async function exportMLDatasetJSON(): Promise<string> {
 }
 
 export async function exportFullBackup(): Promise<string> {
-  const { categories, brackets, transactions, recurring, settings } =
-    await loadAll();
+  const {
+    categories,
+    brackets,
+    transactions,
+    recurring,
+    settings,
+    splitShares,
+  } = await loadAll();
   return JSON.stringify(
     {
       schemaVersion: SCHEMA_VERSION,
@@ -220,6 +231,7 @@ export async function exportFullBackup(): Promise<string> {
       transactions,
       recurring,
       settings,
+      splitShares,
       exportedAt: new Date().toISOString(),
     },
     null,
@@ -254,6 +266,7 @@ export async function importFullBackup(json: string) {
     brackets?: unknown[];
     recurring?: unknown[];
     settings?: unknown;
+    splitShares?: unknown[];
   };
 
   // A backup written by a newer app version might use a data shape this
@@ -274,6 +287,9 @@ export async function importFullBackup(json: string) {
   const recurringRaw: unknown[] = Array.isArray(data.recurring)
     ? data.recurring
     : [];
+  const splitSharesRaw: unknown[] = Array.isArray(data.splitShares)
+    ? data.splitShares
+    : [];
 
   // Generous sanity cap — not a real-world size any real backup would hit,
   // just a guard against a corrupted/hostile file freezing the tab on import.
@@ -282,7 +298,8 @@ export async function importFullBackup(json: string) {
     data.categories.length > MAX_RECORDS ||
     data.transactions.length > MAX_RECORDS ||
     bracketsRaw.length > MAX_RECORDS ||
-    recurringRaw.length > MAX_RECORDS
+    recurringRaw.length > MAX_RECORDS ||
+    splitSharesRaw.length > MAX_RECORDS
   ) {
     throw new Error("Backup file is too large to import.");
   }
@@ -316,20 +333,25 @@ export async function importFullBackup(json: string) {
   const oldBracketIds = bracketsRaw.map(extractId);
   const oldCategoryIds = (data.categories as unknown[]).map(extractId);
   const oldRecurringIds = recurringRaw.map(extractId);
+  const oldTransactionIds = (data.transactions as unknown[]).map(extractId);
 
   await db.transaction(
     "rw",
-    db.brackets,
-    db.categories,
-    db.transactions,
-    db.recurring,
-    db.settings,
+    [
+      db.brackets,
+      db.categories,
+      db.transactions,
+      db.recurring,
+      db.settings,
+      db.splitShares,
+    ],
     async () => {
       await db.brackets.clear();
       await db.categories.clear();
       await db.transactions.clear();
       await db.recurring.clear();
       await db.settings.clear();
+      await db.splitShares.clear();
 
       const bracketIdMap = new Map<number, number>();
       let legacyIds: LegacyBracketIds | null = null;
@@ -410,6 +432,7 @@ export async function importFullBackup(json: string) {
         });
       }
 
+      const transactionIdMap = new Map<number, number>();
       if (transactions.length) {
         const remapped = transactions.map((t) => ({
           ...t,
@@ -419,10 +442,26 @@ export async function importFullBackup(json: string) {
               ? recurringIdMap.get(t.recurringId)
               : undefined,
         }));
-        await db.transactions.bulkAdd(stripIds<Transaction>(remapped));
+        const newIds = await db.transactions.bulkAdd(
+          stripIds<Transaction>(remapped),
+          { allKeys: true },
+        );
+        newIds.forEach((newId, i) => {
+          const oldId = oldTransactionIds[i];
+          if (typeof oldId === "number") transactionIdMap.set(oldId, newId);
+        });
       }
       if (Array.isArray(data.settings) && data.settings.length) {
         await db.settings.bulkAdd(sanitizeSettings(data.settings));
+      }
+      // A split share whose transaction didn't survive remapping (a backup
+      // edited by hand, or one from a future version dropping fields this
+      // version can't reconstruct) is dropped rather than imported pointing
+      // at a transaction that doesn't exist — same principle as any other
+      // orphan-prevention in this function.
+      const splitShares = sanitizeSplitShares(splitSharesRaw, transactionIdMap);
+      if (splitShares.length) {
+        await db.splitShares.bulkAdd(stripIds<SplitShare>(splitShares));
       }
     },
   );
@@ -631,6 +670,47 @@ function sanitizeSettings(raw: unknown[]): Settings[] {
       hideWidgetAmounts: s.hideWidgetAmounts === true,
     };
   });
+}
+
+// Any split share whose transaction didn't make it into transactionIdMap
+// (missing/invalid transactionId in the source file) is dropped — an IOU
+// pointing at a transaction that doesn't exist is confusing debris, same
+// principle as any other orphan-prevention in this file. amountSettled is
+// clamped to amountOwed so a corrupted or hand-edited file can't produce a
+// share that reads as "more than fully repaid".
+function sanitizeSplitShares(
+  raw: unknown[],
+  transactionIdMap: Map<number, number>,
+): SplitShare[] {
+  const result: SplitShare[] = [];
+  for (const entry of raw) {
+    const s = (entry && typeof entry === "object" ? entry : {}) as Record<
+      string,
+      unknown
+    >;
+    const oldTransactionId =
+      typeof s.transactionId === "number" ? s.transactionId : undefined;
+    const newTransactionId =
+      oldTransactionId !== undefined
+        ? transactionIdMap.get(oldTransactionId)
+        : undefined;
+    if (newTransactionId === undefined) continue;
+    const personName = asText(s.personName, 60).trim();
+    if (!personName) continue;
+    const amountOwed = Math.max(0, asFiniteNumber(s.amountOwed, 0));
+    const amountSettled = Math.min(
+      amountOwed,
+      Math.max(0, asFiniteNumber(s.amountSettled, 0)),
+    );
+    result.push({
+      transactionId: newTransactionId,
+      personName,
+      amountOwed,
+      amountSettled,
+      createdAt: asFiniteNumber(s.createdAt, Date.now()),
+    });
+  }
+  return result;
 }
 
 function stripIds<T extends { id?: number }>(arr: T[]): T[] {

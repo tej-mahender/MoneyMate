@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import History from "./History";
@@ -174,7 +174,9 @@ describe("History — delete and undo", () => {
     await screen.findByText(/Landlord/);
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
-    expect(screen.queryByText(/Landlord/)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText(/Landlord/)).not.toBeInTheDocument(),
+    );
     expect(await db.transactions.count()).toBe(0);
 
     await user.click(await screen.findByText("Undo delete"));

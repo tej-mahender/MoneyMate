@@ -6,9 +6,17 @@ import {
   monthKey,
   monthLabel,
   todayISO,
+  shortDate,
   iconBadgeStyle,
 } from "../lib/format";
-import { Wallet, HelpCircle, Plus, ChevronRight } from "lucide-react";
+import {
+  Wallet,
+  HelpCircle,
+  Plus,
+  ChevronRight,
+  HandCoins,
+  Check,
+} from "lucide-react";
 
 const KIND_ORDER: Record<BracketKind, number> = {
   spend: 0,
@@ -117,6 +125,68 @@ export default function Overview({
   );
   const unbudgetedSpent = unbudgetedTx.reduce((s, t) => s + t.amount, 0);
 
+  // Not month-scoped like everything above — a debt from a dinner two
+  // months ago is still owed today, so this deliberately looks at every
+  // split share ever logged, not just this month's.
+  const splitShares = useLiveQuery(() => db.splitShares.toArray(), []) ?? [];
+  const owedToYou = splitShares.reduce(
+    (s, sh) => s + (sh.amountOwed - sh.amountSettled),
+    0,
+  );
+
+  // Build per-person split summary for the home screen's owed section
+  const txByIdAll = new Map(txs.map((t) => [t.id, t]));
+  const catByIdAll = new Map(allCats.map((c) => [c.id, c]));
+  type OwedPerson = {
+    key: string;
+    name: string;
+    outstanding: number;
+    totalOwed: number;
+    shareCount: number;
+    recentCat: string;
+    recentDate: string;
+  };
+  const owedByPerson = new Map<string, OwedPerson>();
+  for (const sh of splitShares) {
+    const key = sh.personName.trim().toLowerCase();
+    const entry = owedByPerson.get(key) ?? {
+      key,
+      name: sh.personName.trim(),
+      outstanding: 0,
+      totalOwed: 0,
+      shareCount: 0,
+      recentCat: "",
+      recentDate: "",
+    };
+    entry.outstanding += sh.amountOwed - sh.amountSettled;
+    entry.totalOwed += sh.amountOwed;
+    entry.shareCount += 1;
+    // Track most recent for context
+    const tx = txByIdAll.get(sh.transactionId);
+    if (tx) {
+      const cat = catByIdAll.get(tx.categoryId);
+      if (!entry.recentDate || tx.date > entry.recentDate) {
+        entry.recentCat = cat ? `${cat.icon} ${cat.name}` : "Uncategorized";
+        entry.recentDate = tx.date;
+      }
+    }
+    owedByPerson.set(key, entry);
+  }
+  const owedPeopleList = [...owedByPerson.values()];
+  const owedOutstanding = owedPeopleList
+    .filter((p) => p.outstanding > 0.005)
+    .sort((a, b) => b.outstanding - a.outstanding);
+  const owedSettled = owedPeopleList
+    .filter((p) => p.outstanding <= 0.005)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const hasAnySplits = splitShares.length > 0;
+
+  function personInitials(name: string) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.trim().slice(0, 2).toUpperCase();
+  }
+
   const trackIncome = totalIncome > 0;
   const unallocated = totalIncome - spendCapTotal - allocationTargetTotal;
   const actualLeftover =
@@ -135,6 +205,16 @@ export default function Overview({
     }
     return `${fmtMoney(actual, currency)} of ${fmtMoney(target, currency)} target`;
   }
+
+  const HOME_OWED_LIMIT = 3;
+  const totalOwedPeopleCount = owedPeopleList.length;
+  const displayedOutstanding = owedOutstanding.slice(0, HOME_OWED_LIMIT);
+  const remainingSlots = HOME_OWED_LIMIT - displayedOutstanding.length;
+  const displayedSettled =
+    remainingSlots > 0 ? owedSettled.slice(0, remainingSlots) : [];
+  const hasMoreOwed =
+    totalOwedPeopleCount >
+    displayedOutstanding.length + displayedSettled.length;
 
   return (
     <>
@@ -191,6 +271,118 @@ export default function Overview({
             </div>
           </div>
         )}
+
+        <div className="card owed-home-section">
+          <div className="owed-header">
+            <h2>
+              <HandCoins size={18} />
+              Owed to you
+            </h2>
+            {owedToYou > 0.005 && (
+              <span className="owed-total-badge">
+                {fmtMoney(owedToYou, currency)}
+              </span>
+            )}
+          </div>
+
+          {!hasAnySplits ? (
+            <div className="empty" style={{ padding: "24px 12px" }}>
+              <div className="glyph">
+                <HandCoins size={28} strokeWidth={1.5} />
+              </div>
+              Split an expense next time you cover the bill — who owes what shows up here.
+            </div>
+          ) : (
+            <>
+              {displayedOutstanding.map((p) => (
+                <div
+                  key={p.key}
+                  className="owed-mini-person"
+                  onClick={() => navigate("/owed")}
+                >
+                  <div className="person-avatar">
+                    {personInitials(p.name)}
+                  </div>
+                  <div className="owed-mini-info">
+                    <div className="owed-mini-name">{p.name}</div>
+                    <div className="owed-mini-sub">
+                      {p.shareCount} expense{p.shareCount === 1 ? "" : "s"}
+                      {p.recentCat ? ` · ${p.recentCat}` : ""}
+                    </div>
+                  </div>
+                  <div className="owed-mini-amt">
+                    {fmtMoney(p.outstanding, currency)}
+                  </div>
+                </div>
+              ))}
+
+              {displayedSettled.length > 0 && displayedOutstanding.length > 0 && (
+                <div
+                  style={{
+                    borderTop: "1px solid var(--surface-border)",
+                    marginTop: 4,
+                    paddingTop: 4,
+                  }}
+                />
+              )}
+
+              {displayedSettled.map((p) => (
+                <div
+                  key={p.key}
+                  className="owed-mini-person"
+                  onClick={() => navigate("/owed")}
+                  style={{ opacity: 0.65 }}
+                >
+                  <div className="person-avatar settled">
+                    {personInitials(p.name)}
+                  </div>
+                  <div className="owed-mini-info">
+                    <div className="owed-mini-name">{p.name}</div>
+                    <div className="owed-mini-sub">
+                      {fmtMoney(p.totalOwed, currency)} settled
+                      {p.recentDate ? ` · ${shortDate(p.recentDate)}` : ""}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--good)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Check size={13} /> Paid
+                  </div>
+                </div>
+              ))}
+
+              {owedOutstanding.length === 0 && owedSettled.length > 0 && (
+                <div
+                  className="muted"
+                  style={{
+                    textAlign: "center",
+                    fontSize: 12,
+                    padding: "8px 0 4px",
+                  }}
+                >
+                  Everyone's paid up!
+                </div>
+              )}
+
+              {hasMoreOwed && (
+                <button
+                  className="owed-view-all"
+                  onClick={() => navigate("/owed")}
+                >
+                  View all {totalOwedPeopleCount} people{" "}
+                  <ChevronRight size={14} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
 
         <div className="card">
           <h2>Brackets</h2>

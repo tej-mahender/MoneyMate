@@ -83,6 +83,29 @@ export interface Recurring {
   note?: string;
 }
 
+/** A friend's share of a split expense. The underlying Transaction (via
+ *  `transactionId`) only ever records *your own* share of the cost — this
+ *  is what makes the rest of the app (Dashboard, Analytics, every budget
+ *  figure) completely unaware splitting exists at all, with zero special
+ *  cases anywhere else. `personName` is a plain typed string, not a
+ *  foreign key to a managed "people" list — there's no picker, just a
+ *  text field with autocomplete suggested from names used before, so nothing
+ *  needs a separate person-management screen for what's meant to be a
+ *  lightweight IOU note, not a contacts system.
+ *  `amountSettled` tracks a running total repaid (not a plain boolean) —
+ *  real repayment between friends is often partial and dribbles in over
+ *  time, not one clean lump sum. Settling never creates a Transaction and
+ *  never touches any category's budget: the money was never counted as
+ *  spent by you in the first place, so there's nothing to "give back". */
+export interface SplitShare {
+  id?: number;
+  transactionId: number;
+  personName: string;
+  amountOwed: number;
+  amountSettled: number;
+  createdAt: number;
+}
+
 export interface Settings {
   id?: number; // always 1
   onboarded: boolean;
@@ -104,6 +127,7 @@ class MoneyMateDatabase extends Dexie {
   transactions!: Table<Transaction, number>;
   recurring!: Table<Recurring, number>;
   settings!: Table<Settings, number>;
+  splitShares!: Table<SplitShare, number>;
 
   constructor() {
     super("pfos_db");
@@ -235,6 +259,19 @@ class MoneyMateDatabase extends Dexie {
             delete cat.flow;
           });
       });
+
+    // v5: adds split-expense tracking (splitShares) — purely additive, no
+    // existing table touched, nothing to backfill since the feature starts
+    // empty for everyone. See the SplitShare interface's own comment for
+    // why the underlying transaction only ever holds the user's own share.
+    this.version(5).stores({
+      brackets: "++id, name, kind, archived",
+      categories: "++id, name, archived, bracketId",
+      transactions: "++id, type, categoryId, date, recurringId",
+      recurring: "++id, categoryId, nextDate, paused",
+      settings: "++id",
+      splitShares: "++id, transactionId, personName",
+    });
   }
 }
 

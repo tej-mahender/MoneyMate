@@ -26,15 +26,21 @@ export default function TransactionDetail({ currency }: { currency: string }) {
 
   async function handleDelete() {
     if (!t) return;
-    const confirmed = await showConfirm({
-      title: "Delete transaction?",
-      message: "This can't be undone.",
-      confirmLabel: "Delete",
-      cancelLabel: "Keep it",
-      danger: true,
+     const confirmed = await showConfirm({
+       title: "Delete transaction?",
+       message: "This can't be undone.",
+       confirmLabel: "Delete",
+       cancelLabel: "Keep it",
+       danger: true,
+     });
+     if (!confirmed) return;
+    const shareIds = (
+      await db.splitShares.where("transactionId").equals(t.id!).toArray()
+    ).map((s) => s.id!);
+    await db.transaction("rw", db.transactions, db.splitShares, async () => {
+      if (shareIds.length) await db.splitShares.bulkDelete(shareIds);
+      await db.transactions.delete(t.id!);
     });
-    if (!confirmed) return;
-    await db.transactions.delete(t.id!);
     showToast("Transaction deleted.");
     navigate("/history");
   }

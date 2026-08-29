@@ -701,8 +701,8 @@ export default function Settings({
         <div className="card">
           <h2>About</h2>
           <p className="muted">
-            Money Mate — zero login, zero ads, zero subscription. Installable to
-            your home screen and fully usable offline.
+            Money Mate — zero login, zero ads, zero subscription, zero tracking.
+            Installable to your home screen and fully usable offline.
           </p>
         </div>
       </div>
