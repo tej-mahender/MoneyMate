@@ -38,8 +38,28 @@
   --sans: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 20px 40px -16px rgba(0, 0, 0, 0.55);
-  --shadow-glow-gold: 0 8px 24px -6px rgba(86, 242, 154, 0.45);
+  /* ── Spatial elevation system — every surface reads as a physical layer:
+     a bevel highlight along the top edge (simulated light from above), a
+     hairline shade along the bottom edge (the surface's own thickness),
+     plus a near contact-shadow and a far ambient-shadow for cast depth.
+     Same technique at every tier, just longer/softer as elevation increases. */
+  --ease-spatial: cubic-bezier(.16, 1, .3, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --dur-fast: 150ms;
+  --dur-med: 250ms;
+  --dur-slow: 400ms;
+
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --edge-highlight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --edge-shade: inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+
+  --shadow-1: 0 1px 2px -1px rgba(0, 0, 0, 0.4);
+  --shadow-card: var(--edge-highlight), var(--edge-shade), 0 10px 22px -14px rgba(0, 0, 0, 0.6), 0 26px 48px -20px rgba(0, 0, 0, 0.6);
+  --shadow-raised: var(--edge-highlight), var(--edge-shade), 0 14px 30px -14px rgba(0, 0, 0, 0.62), 0 34px 60px -22px rgba(0, 0, 0, 0.62);
+  --shadow-floating: var(--edge-highlight), 0 24px 56px -16px rgba(0, 0, 0, 0.7), 0 52px 96px -28px rgba(0, 0, 0, 0.72);
+  --shadow-pressed: inset 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-groove: inset 0 2px 5px rgba(0, 0, 0, 0.42), inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-glow-gold: 0 10px 26px -6px rgba(86, 242, 154, 0.5), 0 2px 10px -2px rgba(86, 242, 154, 0.32);
   --glass-blur: blur(20px) saturate(150%);
   color-scheme: dark;
 }
@@ -68,8 +88,17 @@
   --over: #C0433F;
   --over-bg: rgba(192, 67, 63, 0.10);
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 16px 32px -18px rgba(11, 31, 27, 0.18);
-  --shadow-glow-gold: 0 8px 20px -8px rgba(2, 122, 92, 0.30);
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --edge-highlight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --edge-shade: inset 0 -1px 0 rgba(11, 31, 27, 0.06);
+
+  --shadow-1: 0 1px 2px -1px rgba(11, 31, 27, 0.08);
+  --shadow-card: var(--edge-highlight), var(--edge-shade), 0 8px 18px -12px rgba(11, 31, 27, 0.16), 0 22px 40px -20px rgba(11, 31, 27, 0.14);
+  --shadow-raised: var(--edge-highlight), var(--edge-shade), 0 12px 26px -12px rgba(11, 31, 27, 0.18), 0 30px 50px -20px rgba(11, 31, 27, 0.16);
+  --shadow-floating: var(--edge-highlight), 0 20px 48px -16px rgba(11, 31, 27, 0.22), 0 44px 88px -28px rgba(11, 31, 27, 0.2);
+  --shadow-pressed: inset 0 2px 5px rgba(11, 31, 27, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-groove: inset 0 2px 4px rgba(11, 31, 27, 0.10), inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-glow-gold: 0 10px 22px -6px rgba(2, 122, 92, 0.35), 0 2px 10px -2px rgba(2, 122, 92, 0.22);
   --glass-blur: blur(16px) saturate(140%);
   color-scheme: light;
 }
@@ -84,6 +113,10 @@ body,
   width: 100%;
   height: 100%;
   overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -148,6 +181,7 @@ button:focus:not(:focus-visible) {
   -webkit-backdrop-filter: var(--glass-blur);
   padding: calc(env(safe-area-inset-top) + 20px) 20px 16px;
   border-bottom: 1px solid var(--surface-border);
+  box-shadow: 0 14px 28px -18px rgba(0, 0, 0, 0.4);
 }
 
 .topbar .eyebrow {
@@ -185,7 +219,10 @@ button:focus:not(:focus-visible) {
   flex: 1;
 }
 
-/* Glass card */
+/* Glass card — a physical layer floating over the shell: bevel highlight
+   along its top edge, ambient + contact shadow cast beneath, gentle lift
+   on hover for pointer-capable devices (skipped on touch so nothing gets
+   stuck "hovered" after a tap). */
 .card {
   background: var(--surface);
   border: 1px solid var(--surface-border);
@@ -195,7 +232,16 @@ button:focus:not(:focus-visible) {
   -webkit-backdrop-filter: var(--glass-blur);
   padding: 20px;
   margin-bottom: 16px;
-  animation: rise .45s cubic-bezier(.16, 1, .3, 1) both;
+  animation: rise .45s var(--ease-spatial) both;
+  transition: transform var(--dur-med) var(--ease-spatial), box-shadow var(--dur-med) var(--ease-spatial);
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-raised);
+  }
 }
 
 @keyframes rise {
@@ -241,6 +287,15 @@ button:focus:not(:focus-visible) {
   text-align: center;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-med) var(--ease-spatial), box-shadow var(--dur-med) var(--ease-spatial);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .grid-3>div:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
+  }
 }
 
 .grid-3 .label {
@@ -278,11 +333,12 @@ button:focus:not(:focus-visible) {
   padding: 13px 0;
   border-bottom: 1px solid var(--surface-border);
   cursor: pointer;
-  transition: opacity .15s;
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .cat-row:active {
   opacity: .7;
+  transform: scale(0.99);
 }
 
 .cat-row:last-child {
@@ -332,24 +388,30 @@ button:focus:not(:focus-visible) {
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-groove);
 }
 
 .bar-fill {
   height: 100%;
   border-radius: 6px;
-  transition: width .5s cubic-bezier(.16, 1, .3, 1);
+  position: relative;
+  transition: width .5s var(--ease-spatial);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 3px rgba(0, 0, 0, 0.18);
 }
 
 .bar-fill.good {
   background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 70%, white));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 3px rgba(0, 0, 0, 0.18), 0 0 10px -2px color-mix(in srgb, var(--good) 60%, transparent);
 }
 
 .bar-fill.warn {
   background: linear-gradient(90deg, var(--gold), var(--warn));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 3px rgba(0, 0, 0, 0.18), 0 0 10px -2px color-mix(in srgb, var(--warn) 55%, transparent);
 }
 
 .bar-fill.over {
   background: linear-gradient(90deg, var(--rose), var(--over));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 3px rgba(0, 0, 0, 0.18), 0 0 10px -2px color-mix(in srgb, var(--over) 55%, transparent);
 }
 
 .pct-tag {
@@ -389,7 +451,8 @@ textarea {
   font-size: 15.5px;
   font-family: var(--sans);
   font-weight: 500;
-  transition: border-color .15s, box-shadow .15s;
+  box-shadow: var(--shadow-groove);
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
 input:focus,
@@ -397,7 +460,7 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: transparent;
-  box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
+  box-shadow: var(--shadow-groove), 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
 }
 
 .row2 {
@@ -433,17 +496,23 @@ textarea:focus {
   color: #02291D;
   cursor: pointer;
   margin-top: 18px;
-  box-shadow: var(--shadow-glow-gold);
-  transition: transform .12s ease, box-shadow .12s ease, filter .15s ease;
+  box-shadow: var(--edge-highlight), var(--shadow-glow-gold);
+  transition: transform var(--dur-fast) var(--ease-spatial), box-shadow var(--dur-fast) var(--ease-spatial), filter var(--dur-fast) ease;
 }
 
 .btn:hover {
   filter: brightness(1.05);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .btn:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+}
+
 .btn:active {
   transform: translateY(1px) scale(0.985);
-  box-shadow: 0 4px 14px -6px rgba(240, 185, 77, 0.4);
+  box-shadow: var(--shadow-pressed);
 }
 
 .btn:disabled {
@@ -456,7 +525,7 @@ textarea:focus {
   background: var(--surface-strong);
   color: var(--ink);
   border: 1px solid var(--surface-border-strong);
-  box-shadow: none;
+  box-shadow: var(--edge-highlight-soft), var(--shadow-1);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
 }
@@ -465,7 +534,7 @@ textarea:focus {
   background: var(--over-bg);
   color: var(--over);
   border: 1px solid color-mix(in srgb, var(--over) 40%, transparent);
-  box-shadow: none;
+  box-shadow: var(--edge-highlight-soft), var(--shadow-1);
 }
 
 .danger-zone {
@@ -494,7 +563,7 @@ textarea:focus {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   color: var(--ink-soft);
-  box-shadow: none;
+  box-shadow: var(--edge-highlight-soft);
 }
 
 .btn.ghost:hover {
@@ -533,7 +602,8 @@ textarea:focus {
   font-weight: 500;
   cursor: pointer;
   text-align: left;
-  transition: border-color .15s, box-shadow .15s;
+  box-shadow: var(--shadow-groove);
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
 .dropdown-trigger span {
@@ -548,7 +618,7 @@ textarea:focus {
 
 .dropdown-trigger[aria-expanded="true"] {
   border-color: transparent;
-  box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
+  box-shadow: var(--shadow-groove), 0 0 0 2px var(--void), 0 0 0 4px var(--gold);
 }
 
 .dropdown-panel {
@@ -561,7 +631,7 @@ textarea:focus {
   border: 1px solid var(--surface-border-strong);
   border-radius: 16px;
   padding: 6px;
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-floating);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
@@ -600,7 +670,11 @@ textarea:focus {
   font-weight: 500;
   color: var(--ink-soft);
   cursor: pointer;
-  transition: background .12s, color .12s;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
+}
+
+.dropdown-option:active {
+  transform: scale(0.98);
 }
 
 .dropdown-option span {
@@ -679,6 +753,48 @@ textarea:focus {
   position: relative;
 }
 
+/* Legend grid shown below the pie chart — replaces the old in-chart
+   leader-line labels that overlapped when many categories were present. */
+.pie-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+.pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;               /* allow truncation inside flex */
+  padding: 5px 0;
+}
+
+.pie-legend-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.pie-legend-name {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pie-legend-value {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
 /* Transaction detail page */
 .detail-amount {
   font-family: var(--mono);
@@ -735,6 +851,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   font-size: 17px;
+  box-shadow: var(--edge-highlight-soft), var(--shadow-1);
 }
 
 .icon-picker-panel {
@@ -745,7 +862,7 @@ textarea:focus {
   border: 1px solid var(--surface-border-strong);
   border-radius: 16px;
   padding: 14px;
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-floating);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   overflow: hidden;
@@ -765,6 +882,12 @@ textarea:focus {
   border: 1px solid var(--surface-border);
   cursor: pointer;
   padding: 0;
+  box-shadow: var(--edge-highlight-soft), 0 2px 5px -1px rgba(0, 0, 0, 0.35);
+  transition: transform var(--dur-fast) var(--ease-spatial);
+}
+
+.icon-picker-color-dot:active {
+  transform: scale(0.88);
 }
 
 .icon-picker-grid {
@@ -780,7 +903,11 @@ textarea:focus {
   font-size: 17px;
   padding: 6px 0;
   cursor: pointer;
-  transition: background .12s;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
+}
+
+.icon-picker-emoji:active {
+  transform: scale(0.9);
 }
 
 .icon-picker-emoji:hover {
@@ -802,12 +929,16 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  transition: background .15s, color .15s;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .icon-btn:hover {
   background: var(--surface-strong);
   color: var(--ink);
+}
+
+.icon-btn:active {
+  transform: scale(0.88);
 }
 
 .icon-btn.danger:hover {
@@ -833,11 +964,15 @@ textarea:focus {
   padding-left: 10px;
   padding-right: 10px;
   margin: 0 -10px;
-  transition: background .12s;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .tx-link:hover {
   background: var(--surface-strong);
+}
+
+.tx-link:active {
+  transform: scale(0.99);
 }
 
 .tx-left {
@@ -857,6 +992,7 @@ textarea:focus {
   font-size: 17px;
   flex-shrink: 0;
   border: 1px solid var(--surface-border);
+  box-shadow: var(--edge-highlight-soft), var(--shadow-1);
 }
 
 .tx-meta {
@@ -934,7 +1070,12 @@ textarea:focus {
   background: var(--surface);
   color: var(--ink-soft);
   cursor: pointer;
-  transition: all .15s ease;
+  box-shadow: var(--edge-highlight-soft);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
+}
+
+.chip:active {
+  transform: scale(0.95);
 }
 
 .chip.active {
@@ -942,7 +1083,7 @@ textarea:focus {
   border-color: transparent;
   color: #02291D;
   font-weight: 700;
-  box-shadow: var(--shadow-glow-gold);
+  box-shadow: var(--edge-highlight), var(--shadow-glow-gold);
 }
 
 /* Floating glass tab bar */
@@ -983,7 +1124,7 @@ textarea:focus {
   border-radius: 24px;
   display: flex;
   padding: 7px;
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: var(--shadow-floating);
   pointer-events: auto;
 }
 
@@ -1004,8 +1145,12 @@ textarea:focus {
   font-weight: 700;
   letter-spacing: .01em;
   color: var(--ink-faint);
-  transition: color .2s ease;
+  transition: color .2s ease, transform var(--dur-fast) var(--ease-spatial);
   border-radius: 17px;
+}
+
+.nav-item:active {
+  transform: scale(0.92);
 }
 
 .nav-item.active {
@@ -1023,7 +1168,7 @@ textarea:focus {
   inset: 3px;
   border-radius: 17px;
   background: var(--aurum);
-  box-shadow: var(--shadow-glow-gold);
+  box-shadow: var(--edge-highlight), var(--shadow-glow-gold);
   z-index: 0;
 }
 
@@ -1038,11 +1183,18 @@ textarea:focus {
   color: #02291D;
   border: none;
   cursor: pointer;
-  box-shadow: var(--shadow-glow-gold), 0 12px 28px -8px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--edge-highlight), var(--shadow-glow-gold), 0 16px 32px -10px rgba(0, 0, 0, 0.55);
   z-index: 35;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: box-shadow var(--dur-med) var(--ease-spatial);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fab:hover {
+    box-shadow: var(--edge-highlight), var(--shadow-glow-gold), 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+  }
 }
 
 .toast-wrap {
@@ -1064,7 +1216,7 @@ textarea:focus {
   border-radius: 24px;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-floating);
   border: 1px solid var(--surface-border-strong);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -1078,6 +1230,7 @@ textarea:focus {
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
   border-radius: 16px;
+  box-shadow: var(--shadow-groove);
 }
 
 @keyframes shimmer {
@@ -1208,6 +1361,15 @@ textarea:focus {
   height: auto;
   filter: drop-shadow(0 18px 40px rgba(2, 145, 109, 0.35));
   margin-bottom: 22px;
+  animation: hero-float 5s var(--ease-spatial) infinite;
+}
+
+/* Extremely subtle — a few pixels of drift, purely ambient. Never used on
+   anything interactive, so there's no risk of it fighting a gesture-driven
+   transform (e.g. framer-motion's whileTap) applied to the same element. */
+@keyframes hero-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
 }
 
 .splash-hero .wordmark {
@@ -1269,6 +1431,7 @@ textarea:focus {
   border: 1px solid rgba(86, 242, 154, 0.28);
   color: rgba(86, 242, 154, 0.75);
   background: rgba(86, 242, 154, 0.06);
+  box-shadow: var(--edge-highlight-soft), var(--shadow-1);
 }
 
 .splash-hero .cta-wrap {
@@ -1353,12 +1516,11 @@ textarea:focus {
   border: 1px solid var(--surface-border-strong);
   border-radius: 22px;
   padding: 28px 24px 22px;
-  box-shadow: 0 24px 56px -12px rgba(0, 0, 0, 0.6),
-              inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: var(--shadow-floating);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   text-align: center;
-  animation: confirm-rise .28s cubic-bezier(.16, 1, .3, 1) both;
+  animation: confirm-rise .28s var(--ease-spatial) both;
 }
 
 @keyframes confirm-rise {
@@ -1377,6 +1539,7 @@ textarea:focus {
   background: var(--warn-bg);
   color: var(--warn);
   border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+  box-shadow: var(--edge-highlight-soft), var(--shadow-1);
 }
 
 .confirm-icon-wrap.danger {
@@ -1428,7 +1591,7 @@ textarea:focus {
   color: #02291D;
   flex-shrink: 0;
   background: var(--aurum);
-  box-shadow: 0 4px 12px -4px rgba(86, 242, 154, 0.35);
+  box-shadow: var(--edge-highlight), 0 4px 12px -4px rgba(86, 242, 154, 0.35);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -1436,7 +1599,7 @@ textarea:focus {
 .person-avatar.settled {
   background: var(--surface-strong);
   color: var(--ink-soft);
-  box-shadow: none;
+  box-shadow: var(--edge-highlight-soft);
   border: 1px solid var(--surface-border);
 }
 
@@ -1449,11 +1612,15 @@ textarea:focus {
   margin: 0 -10px;
   border-radius: 14px;
   cursor: pointer;
-  transition: background .12s;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .settled-row:hover {
   background: var(--surface-strong);
+}
+
+.settled-row:active {
+  transform: scale(0.99);
 }
 
 .settled-row + .settled-row {
@@ -1502,11 +1669,15 @@ textarea:focus {
   margin: 0 -10px;
   border-radius: 14px;
   cursor: pointer;
-  transition: background .12s;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .person-row:hover {
   background: var(--surface-strong);
+}
+
+.person-row:active {
+  transform: scale(0.99);
 }
 
 .person-row + .person-row {
@@ -1574,6 +1745,7 @@ textarea:focus {
   border: 1px solid rgba(240, 168, 62, 0.28);
   padding: 4px 12px;
   border-radius: 20px;
+  box-shadow: var(--edge-highlight-soft);
 }
 
 .owed-mini-person {
@@ -1584,11 +1756,15 @@ textarea:focus {
   margin: 0 -10px;
   border-radius: 14px;
   cursor: pointer;
-  transition: background .12s;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .owed-mini-person:hover {
   background: var(--surface-strong);
+}
+
+.owed-mini-person:active {
+  transform: scale(0.99);
 }
 
 .owed-mini-person + .owed-mini-person {
@@ -1640,13 +1816,18 @@ textarea:focus {
   border: 1px solid var(--surface-border);
   border-radius: 12px;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  box-shadow: var(--edge-highlight-soft);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
 }
 
 .owed-view-all:hover {
   background: var(--surface-strong);
   color: var(--ink);
   border-color: var(--surface-border-strong);
+}
+
+.owed-view-all:active {
+  transform: scale(0.98);
 }
 
 /* Split Expense Cards (Detail View) */
@@ -1656,7 +1837,15 @@ textarea:focus {
   border-radius: 16px;
   padding: 15px 16px;
   margin-bottom: 12px;
-  transition: transform 0.12s ease, border-color 0.12s ease;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-med) var(--ease-spatial), border-color var(--dur-fast) ease, box-shadow var(--dur-med) var(--ease-spatial);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .split-expense-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
+  }
 }
 
 .split-expense-card:last-child {
@@ -1666,6 +1855,7 @@ textarea:focus {
 .split-expense-card.settled {
   opacity: 0.65;
   background: var(--surface);
+  box-shadow: var(--shadow-1);
 }
 
 .split-card-header {
@@ -1721,6 +1911,7 @@ textarea:focus {
   border-radius: 20px;
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: var(--edge-highlight-soft);
 }
 
 .split-badge-settled {
@@ -1736,6 +1927,7 @@ textarea:focus {
   gap: 4px;
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: var(--edge-highlight-soft);
 }
 
 .split-card-breakdown {
@@ -1761,13 +1953,15 @@ textarea:focus {
   border-radius: 4px;
   overflow: hidden;
   margin-top: 8px;
+  box-shadow: var(--shadow-groove);
 }
 
 .split-card-progress-bar {
   height: 100%;
   background: var(--aurum);
   border-radius: 4px;
-  transition: width 0.3s ease;
+  transition: width 0.3s var(--ease-spatial);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 8px -2px rgba(86, 242, 154, 0.6);
 }
 
 .split-card-actions {
@@ -1784,14 +1978,14 @@ textarea:focus {
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--surface-border-strong);
-  box-shadow: none;
+  box-shadow: var(--edge-highlight-soft);
   font-weight: 600;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-med) ease, transform var(--dur-fast) var(--ease-spatial), border-color var(--dur-med) ease, color var(--dur-med) ease;
 }
 
 .split-btn-full:hover {
@@ -1835,12 +2029,13 @@ textarea:focus {
   border-radius: 12px !important;
   background: var(--surface) !important;
   border: 1px solid var(--surface-border) !important;
+  box-shadow: var(--shadow-groove) !important;
   width: 100%;
 }
 
 .split-input-wrap input:focus {
   border-color: transparent !important;
-  box-shadow: 0 0 0 2px var(--void), 0 0 0 3px var(--gold) !important;
+  box-shadow: var(--shadow-groove), 0 0 0 2px var(--void), 0 0 0 3px var(--gold) !important;
 }
 
 .split-btn-record {
@@ -1854,8 +2049,12 @@ textarea:focus {
   background: var(--surface);
   border: 1px solid var(--surface-border-strong);
   color: var(--ink);
-  box-shadow: none;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  box-shadow: var(--edge-highlight-soft);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spatial);
+}
+
+.split-btn-record:not(:disabled):active {
+  transform: scale(0.96);
 }
 
 .split-btn-record:not(:disabled):hover {

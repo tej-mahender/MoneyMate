@@ -520,6 +520,7 @@ export default function Settings({
               <input
                 id="recurring-amount"
                 type="number"
+                placeholder="0.00"
                 value={rAmount}
                 onChange={(e) => setRAmount(e.target.value)}
                 onWheel={(e) => e.currentTarget.blur()}
