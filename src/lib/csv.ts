@@ -1,4 +1,7 @@
 import Papa from "papaparse";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import {
   db,
   type Category,
@@ -720,7 +723,36 @@ function stripIds<T extends { id?: number }>(arr: T[]): T[] {
   });
 }
 
-export function downloadFile(name: string, content: string, type: string) {
+export async function downloadFile(name: string, content: string, type: string) {
+  // Money Mate's Android build is a Capacitor-wrapped WebView, not a real
+  // mobile browser — and Android's System WebView notoriously does not
+  // reliably honor `<a download>` + blob: URLs the way desktop/mobile Chrome
+  // does. There's no `Content-Disposition` header to read a filename or
+  // extension from on a blob: URL, so the WebView has to *guess* both from
+  // the MIME type, and in practice that guess is unreliable — this is the
+  // root cause of CSV exports landing on-device with a .json extension
+  // regardless of which export button was tapped. Writing the file directly
+  // via the native Filesystem plugin and handing it to the native Share
+  // sheet sidesteps that guesswork entirely: the filename (and therefore its
+  // extension) comes from `name` exactly as given, every time.
+  if (Capacitor.isNativePlatform()) {
+    await Filesystem.writeFile({
+      path: name,
+      data: content,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    });
+    const { uri } = await Filesystem.getUri({
+      path: name,
+      directory: Directory.Cache,
+    });
+    await Share.share({
+      title: name,
+      url: uri,
+    });
+    return;
+  }
+
   const blob = new Blob([content], { type });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/db";
 import {
@@ -18,6 +18,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   PieChart,
@@ -39,6 +41,106 @@ import {
 } from "recharts";
 
 const RADIAN = Math.PI / 180;
+// Must match the <ResponsiveContainer height> the pie chart renders at —
+// used to keep decluttered labels from drifting outside the visible card.
+const PIE_CHART_HEIGHT = 300;
+
+type PieLabelEntry = {
+  name: string;
+  value: number;
+  color: string;
+  sx: number;
+  sy: number;
+  mx: number;
+  my: number;
+  ex: number;
+  ey: number;
+  textAnchor: "start" | "end";
+};
+
+/** Precomputes every slice's label position in one pass (rather than each
+ *  slice guessing its own spot independently), so labels can be pushed apart
+ *  when the pie has several thin slices bunched at similar angles — e.g. a
+ *  handful of small, similarly-sized expense categories all near the top of
+ *  the ring, which previously produced overlapping, unreadable text. Slices
+ *  are grouped into a left and right column (matching which side of the pie
+ *  they point toward) and each column is vertically decluttered independently,
+ *  then clamped so the whole label stack stays inside the chart's height. */
+function computePieLabelLayout(
+  cx: number,
+  cy: number,
+  outerRadius: number,
+  data: { name: string; value: number; color: string }[],
+): PieLabelEntry[] {
+  const total = data.reduce((s, d) => s + d.value, 0) || 1;
+  const MIN_GAP = 32; // vertical px between stacked two-line labels
+  const TOP_BOUND = cy - PIE_CHART_HEIGHT / 2 + 16;
+  const BOTTOM_BOUND = cy + PIE_CHART_HEIGHT / 2 - 16;
+
+  let cumAngle = 90; // matches this chart's Pie startAngle={90} endAngle={-270}
+  type Raw = PieLabelEntry & { rightSide: boolean };
+  const raw: Raw[] = [];
+  for (const d of data) {
+    const percent = d.value / total;
+    const sweep = percent * 360;
+    const midAngle = cumAngle - sweep / 2;
+    cumAngle -= sweep;
+    if (percent < 0.01) continue; // sub-1% slivers stay unlabeled to avoid clutter
+    const sin = Math.sin(-RADIAN * midAngle);
+    const cos = Math.cos(-RADIAN * midAngle);
+    const rightSide = cos >= 0;
+    raw.push({
+      name: d.name,
+      value: d.value,
+      color: d.color,
+      sx: cx + (outerRadius + 6) * cos,
+      sy: cy + (outerRadius + 6) * sin,
+      mx: cx + (outerRadius + 20) * cos,
+      my: cy + (outerRadius + 20) * sin,
+      ex: cx + (rightSide ? 1 : -1) * (outerRadius + 40),
+      ey: cy + (outerRadius + 20) * sin,
+      textAnchor: rightSide ? "start" : "end",
+      rightSide,
+    });
+  }
+
+  function declutter(list: Raw[]) {
+    list.sort((a, b) => a.ey - b.ey);
+    // Forward pass: push each label down if it's too close to the one above.
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].ey - list[i - 1].ey < MIN_GAP) {
+        list[i].ey = list[i - 1].ey + MIN_GAP;
+      }
+    }
+    // Backward pass: pull labels back up so the whole stack settles as close
+    // to its original, angle-driven positions as spacing allows, rather than
+    // permanently sagging toward the bottom of the chart.
+    for (let i = list.length - 2; i >= 0; i--) {
+      if (list[i + 1].ey - list[i].ey < MIN_GAP) {
+        list[i].ey = list[i + 1].ey - MIN_GAP;
+      }
+    }
+    // Clamp the whole stack inside the chart's vertical bounds by shifting
+    // it as a block, preserving the spacing just established above.
+    if (list.length > 0) {
+      if (list[0].ey < TOP_BOUND) {
+        const shift = TOP_BOUND - list[0].ey;
+        list.forEach((it) => (it.ey += shift));
+      }
+      if (list[list.length - 1].ey > BOTTOM_BOUND) {
+        const shift = BOTTOM_BOUND - list[list.length - 1].ey;
+        list.forEach((it) => (it.ey += shift));
+      }
+    }
+  }
+
+  const rightItems = raw.filter((r) => r.rightSide);
+  const leftItems = raw.filter((r) => !r.rightSide);
+  declutter(rightItems);
+  declutter(leftItems);
+
+  return [...rightItems, ...leftItems];
+}
 
 type Range = "month" | "3m" | "6m" | "1y" | "all";
 const RANGE_MONTHS: Record<Range, number> = {
@@ -79,24 +181,26 @@ export default function Analytics({ currency }: { currency: string }) {
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
-  const spendBracketIds = new Set(
-    brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id),
-  );
+  const spendBracketIds = new Set(brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id));
   // Money moved into an allocation bracket (Savings/Investments/EMI…) is
   // logged as an ordinary expense-type transaction, but it isn't spend —
   // Dashboard already excludes it from "Spent"; every figure derived from
   // rangeExpenses below (pie chart, trend line, top merchants, insights)
   // needs the same exclusion so a savings transfer doesn't inflate them.
-  const allocationBracketIds = new Set(
-    brackets.filter((b) => b.kind === "allocation").map((b) => b.id),
-  );
+  const allocationBracketIds = new Set(brackets.filter((b) => b.kind === "allocation").map((b) => b.id));
   const allocationCategoryIds = new Set(
-    categories
-      .filter((c) => allocationBracketIds.has(c.bracketId))
-      .map((c) => c.id),
+    categories.filter((c) => allocationBracketIds.has(c.bracketId)).map((c) => c.id),
   );
   const catMap = new Map(categories.map((c) => [c.id, c]));
-  const curMonth = monthKey(todayISO());
+  const todayMonth = monthKey(todayISO());
+  // Only meaningful when range === "month" — for every other range (3m,
+  // 6m, 1y, all) the window still trails back from today, same as before.
+  // Every existing calculation below already derives from this single
+  // `curMonth` value, so this is the only change needed to let "Month"
+  // browse any past month's isolated snapshot instead of always meaning
+  // "today's month" with no way to step back to a closed one.
+  const [monthOffset, setMonthOffset] = useState(0);
+  const curMonth = range === "month" ? addMonths(todayMonth, monthOffset) : todayMonth;
 
   const startMonth = useMemo(() => {
     if (range === "all") {
@@ -345,48 +449,58 @@ export default function Analytics({ currency }: { currency: string }) {
     };
   }, [rangeExpenses, txs, startMonth, range]);
 
+  // Caches the full decluttered label layout across the several calls
+  // Recharts makes to `renderPieLabel` (once per slice) within one render
+  // pass, so the collision-avoidance math in computePieLabelLayout only has
+  // to run once per pie, using the pixel geometry (cx/cy/outerRadius) that's
+  // identical for every slice.
+  const pieLayoutCacheRef = useRef<{ sig: string; layout: PieLabelEntry[] } | null>(
+    null,
+  );
+
   // Renders each pie slice's name + amount as a persistent label outside the
   // chart, connected back to its slice by a leader line colored to match —
   // the point being nobody should have to hover/tap a slice just to find out
   // what it is, which barely works on a touch device anyway (no hover state).
   function renderPieLabel(props: PieLabelRenderProps) {
-    const { cx, cy, midAngle, outerRadius, name, value, percent, fill } = props;
-    // Sub-1% slivers get crowded and unreadable if labeled individually —
-    // their color is still visible in the ring itself.
+    const { cx, cy, outerRadius, name, value, percent } = props;
     if (!percent || percent < 0.01) return null;
     const numCx = Number(cx);
     const numCy = Number(cy);
     const numOuterRadius = Number(outerRadius);
-    const sin = Math.sin(-RADIAN * Number(midAngle));
-    const cos = Math.cos(-RADIAN * Number(midAngle));
-    const sx = numCx + (numOuterRadius + 6) * cos;
-    const sy = numCy + (numOuterRadius + 6) * sin;
-    const mx = numCx + (numOuterRadius + 20) * cos;
-    const my = numCy + (numOuterRadius + 20) * sin;
-    const rightSide = cos >= 0;
-    const ex = mx + (rightSide ? 1 : -1) * 12;
-    const ey = my;
-    const textAnchor = rightSide ? "start" : "end";
+    const sig = `${numCx.toFixed(1)}|${numCy.toFixed(1)}|${numOuterRadius.toFixed(1)}|${pieData.length}`;
+    if (!pieLayoutCacheRef.current || pieLayoutCacheRef.current.sig !== sig) {
+      pieLayoutCacheRef.current = {
+        sig,
+        layout: computePieLabelLayout(numCx, numCy, numOuterRadius, pieData),
+      };
+    }
+    const entry = pieLayoutCacheRef.current.layout.find(
+      (e) => e.name === name && Math.abs(e.value - Number(value)) < 0.005,
+    );
+    if (!entry) return null;
+
     // Cards on this app's mobile-width layout have far less horizontal room
     // than a desktop chart does — an untruncated long category name (e.g.
     // "Repay Credit Card") could run the label off the edge of the card.
     // The full name is always still available from the Tooltip on tap.
     const label =
-      String(name).length > 15 ? `${String(name).slice(0, 14)}…` : name;
+      entry.name.length > 15 ? `${entry.name.slice(0, 14)}…` : entry.name;
+    const textOffset = entry.textAnchor === "start" ? 7 : -7;
 
     return (
-      <g key={name}>
+      <g key={entry.name}>
         <path
-          d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`}
-          stroke={fill}
+          d={`M${entry.sx},${entry.sy}L${entry.mx},${entry.my}L${entry.ex},${entry.ey}`}
+          stroke={entry.color}
           strokeWidth={1.5}
           fill="none"
         />
-        <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+        <circle cx={entry.ex} cy={entry.ey} r={2} fill={entry.color} stroke="none" />
         <text
-          x={ex + (rightSide ? 7 : -7)}
-          y={ey - 6}
-          textAnchor={textAnchor}
+          x={entry.ex + textOffset}
+          y={entry.ey - 6}
+          textAnchor={entry.textAnchor}
           fontFamily="var(--sans)"
           fontSize={11.5}
           fontWeight={600}
@@ -395,14 +509,14 @@ export default function Analytics({ currency }: { currency: string }) {
           {label}
         </text>
         <text
-          x={ex + (rightSide ? 7 : -7)}
-          y={ey + 8}
-          textAnchor={textAnchor}
+          x={entry.ex + textOffset}
+          y={entry.ey + 8}
+          textAnchor={entry.textAnchor}
           fontFamily="var(--mono)"
           fontSize={10}
           fill="var(--ink-faint)"
         >
-          {fmtMoney(Number(value), currency)}
+          {fmtMoney(entry.value, currency)}
         </text>
       </g>
     );
@@ -413,7 +527,7 @@ export default function Analytics({ currency }: { currency: string }) {
       <header className="topbar">
         <div className="eyebrow">Insights</div>
         <h1>Analytics</h1>
-        <div className="sub">{RANGE_LABEL[range]}</div>
+        <div className="sub">{range === "month" ? monthLabel(curMonth) : RANGE_LABEL[range]}</div>
       </header>
       <div className="content">
         <div className="chip-row" style={{ marginBottom: 16 }}>
@@ -421,12 +535,38 @@ export default function Analytics({ currency }: { currency: string }) {
             <button
               key={r}
               className={"chip" + (range === r ? " active" : "")}
-              onClick={() => setRange(r)}
+              onClick={() => {
+                setRange(r);
+                setMonthOffset(0);
+              }}
             >
               {RANGE_LABEL[r]}
             </button>
           ))}
         </div>
+
+        {range === "month" && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginBottom: 16 }}>
+            <button
+              className="icon-btn"
+              aria-label="Previous month"
+              onClick={() => setMonthOffset((o) => o - 1)}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div style={{ fontFamily: "var(--display)", fontSize: 16, fontWeight: 600, minWidth: 150, textAlign: "center" }}>
+              {monthLabel(curMonth)}
+            </div>
+            <button
+              className="icon-btn"
+              aria-label="Next month"
+              disabled={monthOffset >= 0}
+              onClick={() => setMonthOffset((o) => Math.min(0, o + 1))}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
 
         <div className="card">
           <h2>At a glance</h2>
@@ -504,7 +644,7 @@ export default function Analytics({ currency }: { currency: string }) {
           ) : (
             <>
               <div className="pie-chart-wrap">
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={PIE_CHART_HEIGHT}>
                   <PieChart>
                     <Pie
                       data={pieData}
@@ -540,41 +680,43 @@ export default function Analytics({ currency }: { currency: string }) {
           )}
         </div>
 
-        <div className="card">
-          <h2>Income vs. spend</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={trendData}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--surface-border)"
-              />
-              <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={11} />
-              <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
-              <Tooltip
-                formatter={(v) => fmtMoney(Number(v), currency)}
-                contentStyle={tooltipStyle}
-              />
-              <Line
-                type="monotone"
-                dataKey="spend"
-                stroke="var(--over)"
-                strokeWidth={2}
-                dot={false}
-                name="Spend"
-              />
-              <Line
-                type="monotone"
-                dataKey="income"
-                stroke="var(--good)"
-                strokeWidth={2}
-                dot={false}
-                name="Income"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        {range !== "month" && (
+          <div className="card">
+            <h2>Income vs. spend</h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={trendData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--surface-border)"
+                />
+                <XAxis dataKey="month" stroke="var(--ink-soft)" fontSize={11} />
+                <YAxis stroke="var(--ink-soft)" fontSize={11} width={40} />
+                <Tooltip
+                  formatter={(v) => fmtMoney(Number(v), currency)}
+                  contentStyle={tooltipStyle}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="spend"
+                  stroke="var(--over)"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Spend"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="income"
+                  stroke="var(--good)"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Income"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
-        {categoryTrend.topIds.length > 0 && (
+        {range !== "month" && categoryTrend.topIds.length > 0 && (
           <div className="card">
             <h2>Category trend</h2>
             <ResponsiveContainer width="100%" height={210}>
@@ -671,9 +813,7 @@ export default function Analytics({ currency }: { currency: string }) {
                 <div className="tx-left">
                   <div
                     className="tx-icon"
-                    style={iconBadgeStyle(
-                      SERIES_COLORS[i % SERIES_COLORS.length],
-                    )}
+                    style={iconBadgeStyle(SERIES_COLORS[i % SERIES_COLORS.length])}
                   >
                     {i + 1}
                   </div>
@@ -697,8 +837,7 @@ export default function Analytics({ currency }: { currency: string }) {
               {monthLabel(curMonth)}
             </span>
           </h2>
-          {categories.filter((c) => spendBracketIds.has(c.bracketId)).length ===
-          0 ? (
+          {categories.filter((c) => spendBracketIds.has(c.bracketId)).length === 0 ? (
             <div className="empty">
               <div className="glyph">
                 <BarChart3 size={30} strokeWidth={1.5} />
@@ -710,8 +849,7 @@ export default function Analytics({ currency }: { currency: string }) {
               width="100%"
               height={Math.max(
                 160,
-                categories.filter((c) => spendBracketIds.has(c.bracketId))
-                  .length * 44,
+                categories.filter((c) => spendBracketIds.has(c.bracketId)).length * 44,
               )}
             >
               <BarChart

@@ -181,46 +181,69 @@ export default function Settings({
 
   // Data management
   async function doExportJSON() {
-    downloadFile(
-      `pfos-backup-${todayISO()}.json`,
-      await exportFullBackup(),
-      "application/json",
+    await tryExport(async () =>
+      downloadFile(
+        `moneymate-backup-${todayISO()}.json`,
+        await exportFullBackup(),
+        "application/json",
+      ),
     );
   }
   async function doExportCSV() {
-    downloadFile(
-      `pfos-transactions-${todayISO()}.csv`,
-      await exportTransactionsCSV(),
-      "text/csv",
+    await tryExport(async () =>
+      downloadFile(
+        `moneymate-transactions-${todayISO()}.csv`,
+        await exportTransactionsCSV(),
+        "text/csv",
+      ),
     );
   }
   async function doExportCategoriesCSV() {
-    downloadFile(
-      `pfos-categories-${todayISO()}.csv`,
-      await exportCategoriesCSV(),
-      "text/csv",
+    await tryExport(async () =>
+      downloadFile(
+        `moneymate-categories-${todayISO()}.csv`,
+        await exportCategoriesCSV(),
+        "text/csv",
+      ),
     );
   }
   async function doExportBracketsCSV() {
-    downloadFile(
-      `pfos-brackets-${todayISO()}.csv`,
-      await exportBracketsCSV(),
-      "text/csv",
+    await tryExport(async () =>
+      downloadFile(
+        `moneymate-brackets-${todayISO()}.csv`,
+        await exportBracketsCSV(),
+        "text/csv",
+      ),
     );
   }
   async function doExportMonthlySummaryCSV() {
-    downloadFile(
-      `pfos-monthly-summary-${todayISO()}.csv`,
-      await exportMonthlySummaryCSV(),
-      "text/csv",
+    await tryExport(async () =>
+      downloadFile(
+        `moneymate-monthly-summary-${todayISO()}.csv`,
+        await exportMonthlySummaryCSV(),
+        "text/csv",
+      ),
     );
   }
   async function doExportMLDataset() {
-    downloadFile(
-      `pfos-ml-dataset-${todayISO()}.json`,
-      await exportMLDatasetJSON(),
-      "application/json",
+    await tryExport(async () =>
+      downloadFile(
+        `moneymate-ml-dataset-${todayISO()}.json`,
+        await exportMLDatasetJSON(),
+        "application/json",
+      ),
     );
+  }
+  // Shares the try/catch + toast for every export button — on native Android
+  // this now goes through the Filesystem/Share plugins (see downloadFile),
+  // which can fail (e.g. the user backs out of the share sheet, or the
+  // device is out of storage) in ways a plain browser download never did.
+  async function tryExport(fn: () => Promise<unknown>) {
+    try {
+      await fn();
+    } catch {
+      showToast("Couldn't export that file. Please try again.");
+    }
   }
   async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -520,6 +543,7 @@ export default function Settings({
               <input
                 id="recurring-amount"
                 type="number"
+                placeholder="0.00"
                 value={rAmount}
                 onChange={(e) => setRAmount(e.target.value)}
                 onWheel={(e) => e.currentTarget.blur()}
@@ -655,16 +679,23 @@ export default function Settings({
           <button className="btn secondary" onClick={doExportJSON}>
             Export backup (.json)
           </button>
-          <label htmlFor="import-file">Restore from backup</label>
+          <label htmlFor="import-file" className="btn secondary">
+            Restore from backup
+          </label>
           <input
             id="import-file"
             type="file"
+            className="sr-only"
             accept="application/json"
             onChange={onImport}
           />
-          <button className="btn danger" onClick={wipeAll}>
-            Erase all data
-          </button>
+
+          <div className="danger-zone">
+            <div className="danger-zone-label">Erase everything</div>
+            <button className="btn danger" onClick={wipeAll}>
+              Erase all data
+            </button>
+          </div>
         </div>
 
         <div className="card">

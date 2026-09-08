@@ -475,7 +475,7 @@ export default function BracketDetail({
             />
             <input type="text" placeholder="Bracket name" value={bracketName} onChange={(e) => setBracketName(e.target.value)} style={{ flex: 1 }} />
           </div>
-          <button className="btn secondary" onClick={saveBracket}>
+          <button className="btn" onClick={saveBracket}>
             <Pencil size={15} /> Save bracket
           </button>
 
