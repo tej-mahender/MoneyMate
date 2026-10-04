@@ -253,8 +253,35 @@ export default function AddTransaction() {
     setSaving(true);
 
     if (editId) {
+      try {
+        await db.transaction("rw", db.transactions, db.splitShares, async () => {
+          await db.transactions.update(editId, {
+            type,
+            amount: amt,
+            categoryId,
+            date,
+            merchant: merchant.trim() || undefined,
+            note: note.trim() || undefined,
+            paymentMethod,
+          });
+          await reconcileSplitShares(editId);
+        });
+      } catch (err) {
+        // Never leave the button stuck on "Saving…" or imply it worked.
+        console.warn("Updating transaction failed", err);
+        setSaving(false);
+        showToast("Couldn't save your changes. Please try again.");
+        return;
+      }
+      setSaving(false);
+      showToast("Transaction updated.");
+      navigate(`/transaction/${editId}`);
+      return;
+    }
+
+    try {
       await db.transaction("rw", db.transactions, db.splitShares, async () => {
-        await db.transactions.update(editId, {
+        const id = await db.transactions.add({
           type,
           amount: amt,
           categoryId,
@@ -262,29 +289,25 @@ export default function AddTransaction() {
           merchant: merchant.trim() || undefined,
           note: note.trim() || undefined,
           paymentMethod,
+          createdAt: Date.now(),
         });
-        await reconcileSplitShares(editId);
+        if (isSplitting) await reconcileSplitShares(id);
       });
+    } catch (err) {
+      // Storage full / IndexedDB error: the transaction was rolled back, so
+      // tell the person it was NOT saved and let them retry.
+      console.warn("Saving transaction failed", err);
       setSaving(false);
-      showToast("Transaction updated.");
-      navigate(`/transaction/${editId}`);
+      showToast("Couldn't save that. Please try again.");
       return;
     }
-
-    await db.transaction("rw", db.transactions, db.splitShares, async () => {
-      const id = await db.transactions.add({
-        type,
-        amount: amt,
-        categoryId,
-        date,
-        merchant: merchant.trim() || undefined,
-        note: note.trim() || undefined,
-        paymentMethod,
-        createdAt: Date.now(),
-      });
-      if (isSplitting) await reconcileSplitShares(id);
-    });
-    localStorage.setItem(`${RECENT_CAT_KEY}_${type}`, String(categoryId));
+    // Remembering the last category is a convenience — a blocked
+    // localStorage must not turn a successful save into an error.
+    try {
+      localStorage.setItem(`${RECENT_CAT_KEY}_${type}`, String(categoryId));
+    } catch {
+      /* ignore */
+    }
     setSaving(false);
 
     showToast(

@@ -14,6 +14,8 @@ import {
 } from "./db/db";
 import { todayISO } from "./lib/format";
 import { consumePendingWidgetRoute } from "./lib/widgetBridge";
+import { startWidgetSync } from "./lib/widgetSync";
+import BootError from "./components/BootError";
 import Overview from "./pages/Overview";
 import BottomNav from "./components/BottomNav";
 import Toast from "./components/Toast";
@@ -100,10 +102,7 @@ function AnimatedRoutes({
               <Route
                 path="/budget"
                 element={
-                  <Dashboard
-                    currency={settings.currency}
-                    hideWidgetAmounts={settings.hideWidgetAmounts}
-                  />
+                  <Dashboard currency={settings.currency} />
                 }
               />
               <Route
@@ -148,18 +147,64 @@ function AnimatedRoutes({
   );
 }
 
+// If opening the database hasn't finished by then, treat it as failed so the
+// person gets a way out instead of a skeleton that never goes away.
+const BOOT_TIMEOUT_MS = 15000;
+
 export default function App() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    (async () => {
-      await processRecurring(todayISO());
-      const s = await getSettings();
-      setSettings(s);
-      setLoading(false);
+    let cancelled = false;
+    setLoading(true);
+    setBootError(null);
+    const boot = (async () => {
+      try {
+        await processRecurring(todayISO());
+      } catch (err) {
+        // Due recurring items are nice-to-have at launch; a failure here
+        // must not stop the app opening. getSettings() below is the real
+        // "can we use the database at all" check.
+        console.warn("Recurring processing failed at launch", err);
+      }
+      return getSettings();
     })();
-  }, []);
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Opening storage took too long.")),
+        BOOT_TIMEOUT_MS,
+      ),
+    );
+    Promise.race([boot, timeout]).then(
+      (s) => {
+        if (cancelled) return;
+        setSettings(s);
+        setLoading(false);
+      },
+      (err) => {
+        if (cancelled) return;
+        console.error("App failed to start:", err);
+        setBootError(
+          err instanceof Error && err.message ? err.message : "Unknown error.",
+        );
+        setLoading(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  // Keep the home-screen widget in step with the data from one place (no-op
+  // outside the Android app). Starts once the database has opened.
+  const dbReady = settings !== null;
+  useEffect(() => {
+    if (!dbReady) return;
+    return startWidgetSync();
+  }, [dbReady]);
 
   useEffect(() => {
     if (!settings) return;
@@ -172,6 +217,12 @@ export default function App() {
         : settings.theme;
     root.setAttribute("data-theme", applied);
   }, [settings?.theme]);
+
+  if (bootError) {
+    return (
+      <BootError message={bootError} onRetry={() => setAttempt((n) => n + 1)} />
+    );
+  }
 
   if (loading || !settings) {
     return (

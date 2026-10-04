@@ -227,34 +227,43 @@ keyAlias=moneymate
 keyPassword=<key-password>
 ```
 
+`storeFile` is resolved relative to the `android/` directory (so `../moneymate-release.jks` is a keystore in the repository root); an absolute path also works. The release build **fails on purpose** if `keystore.properties` is missing, rather than producing an unsigned APK.
+
 > Store the keystore and its credentials in a secure, backed-up location. Losing the signing key makes it impossible to publish in-place updates to existing installations.
 
-### 4. Build the Release APK
+### 4. Build the Release (AAB + APK)
 
-From the `android/` directory:
+On Windows, from the repository root:
 
 ```powershell
-.\gradlew.bat assembleRelease
+.\scripts\release.ps1
 ```
 
-On macOS or Linux:
+The script refuses to run with uncommitted changes, runs lint and the test suite, **deletes `dist/` and the copied Android web assets**, rebuilds the web app, runs `cap sync`, bumps `versionCode` in `android/version.properties`, then runs `gradlew clean bundleRelease assembleRelease`. Outputs land in `release/`, named with the version and git commit:
+
+```
+release/MoneyMate-<version>-vc<code>-<commit>.aab   # upload to Google Play
+release/MoneyMate-<version>-vc<code>-<commit>.apk   # sideload / testing
+```
+
+Commit `android/version.properties` after a release so the next build bumps from the right number. Flags: `-Install` (run `npm ci` first), `-NoBump`, `-VersionName 1.1`, `-SkipChecks`, `-AllowDirty`.
+
+Manual equivalent (macOS/Linux, or if you prefer Android Studio):
 
 ```bash
-./gradlew assembleRelease
+rm -rf dist android/app/src/main/assets/public
+npm run build && npx cap sync android
+cd android && ./gradlew clean bundleRelease assembleRelease
 ```
 
-Output:
+> Never build a release without the clean + sync steps: the Android project keeps its own copy of the web app, and an out-of-date copy ships silently.
 
-```
-android/app/build/outputs/apk/release/app-release.apk
-```
-
-Alternatively, in Android Studio: select the **release** build variant, then **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
+To share the source, use `git archive --format=zip -o MoneyMate-src.zip HEAD` rather than zipping the folder. That leaves out `.idea/`, `local.properties`, `dist/` and build output.
 
 ### 5. Install
 
 ```bash
-adb install -r android/app/build/outputs/apk/release/app-release.apk
+adb install -r release/MoneyMate-<version>-vc<code>-<commit>.apk
 ```
 
 ## Data Export and Analytics Integration

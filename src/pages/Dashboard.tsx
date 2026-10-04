@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, computeMonthSummary } from "../db/db";
@@ -16,7 +16,6 @@ import {
 import CategoryRow from "../components/CategoryRow";
 import Ring from "../components/Ring";
 import MonthReview from "../components/MonthReview";
-import { syncWidget } from "../lib/widgetBridge";
 import { Wallet, Receipt, ChevronLeft, ChevronRight, CalendarCheck, X } from "lucide-react";
 
 // The Budget screen — capped spending categories only (Rent, Food,
@@ -44,13 +43,7 @@ function writePromptDismissed(month: string) {
   }
 }
 
-export default function Dashboard({
-  currency,
-  hideWidgetAmounts,
-}: {
-  currency: string;
-  hideWidgetAmounts?: boolean;
-}) {
+export default function Dashboard({ currency }: { currency: string }) {
   const navigate = useNavigate();
   const curMonth = monthKey(todayISO());
   const [params] = useSearchParams();
@@ -167,53 +160,6 @@ export default function Dashboard({
   const ringState =
     budgetPctRaw < 75 ? "good" : budgetPctRaw < 100 ? "warn" : "over";
   const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
-
-  // Per-category spend this month, for the large widget's mini breakdown.
-  // Sorted by spend (not budget) so the rows show "what's actually eating
-  // your month" rather than just whatever has the biggest allocation.
-  const catSpendMap = new Map<number, number>();
-  for (const t of spentTx) {
-    if (t.categoryId == null) continue;
-    catSpendMap.set(
-      t.categoryId,
-      (catSpendMap.get(t.categoryId) ?? 0) + t.amount,
-    );
-  }
-  const topCategories = categories
-    .map((c) => ({
-      name: c.name,
-      icon: c.icon,
-      color: c.color,
-      spent: catSpendMap.get(c.id!) ?? 0,
-      budget: c.budget,
-    }))
-    .filter((c) => c.spent > 0)
-    .sort((a, b) => b.spent - a.spent)
-    .slice(0, 4);
-
-  useEffect(() => {
-    syncWidget({
-      spent: totalSpent,
-      budget: totalBudget,
-      remaining,
-      currency,
-      monthLabel: monthLabel(curMonth),
-      hideAmounts: !!hideWidgetAmounts,
-      categories: topCategories,
-    });
-    // topCategories is derived fresh each render from txs/categories, which
-    // are already tracked below — stringify keeps the effect from firing on
-    // every render when the underlying spend hasn't actually changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    totalSpent,
-    totalBudget,
-    remaining,
-    currency,
-    curMonth,
-    hideWidgetAmounts,
-    JSON.stringify(topCategories),
-  ]);
 
   return (
     <>

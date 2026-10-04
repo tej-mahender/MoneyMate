@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { installGlobalErrorHandlers } from "./lib/globalErrors";
 
 // Self-hosted premium type system — no external font CDN calls, stays offline-first.
 import "@fontsource-variable/fraunces";
@@ -13,6 +14,8 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 
 import "./theme.css";
+
+installGlobalErrorHandlers();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

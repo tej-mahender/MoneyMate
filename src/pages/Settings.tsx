@@ -26,6 +26,7 @@ import {
 } from "../lib/csv";
 import { todayISO, iconBadgeStyle } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
+import { clearWidget } from "../lib/widgetSync";
 import IconPicker from "../components/IconPicker";
 
 const PALETTE = [
@@ -259,8 +260,8 @@ export default function Settings({
       e.target.value = "";
       return;
     }
-    const text = await file.text();
     try {
+      const text = await file.text();
       await importFullBackup(text);
       showToast("Backup restored.");
       const s = await updateSettings({});
@@ -284,27 +285,36 @@ export default function Settings({
     });
     if (!confirmed)
       return;
-    await db.transaction(
-      "rw",
-      [
-        db.brackets,
-        db.categories,
-        db.transactions,
-        db.recurring,
-        db.settings,
-        db.splitShares,
-        db.budgetHistory,
-      ],
-      async () => {
-        await db.splitShares.clear();
-        await db.budgetHistory.clear();
-        await db.brackets.clear();
-        await db.categories.clear();
-        await db.transactions.clear();
-        await db.recurring.clear();
-        await db.settings.clear();
-      },
-    );
+    try {
+      await db.transaction(
+        "rw",
+        [
+          db.brackets,
+          db.categories,
+          db.transactions,
+          db.recurring,
+          db.settings,
+          db.splitShares,
+          db.budgetHistory,
+        ],
+        async () => {
+          await db.splitShares.clear();
+          await db.budgetHistory.clear();
+          await db.brackets.clear();
+          await db.categories.clear();
+          await db.transactions.clear();
+          await db.recurring.clear();
+          await db.settings.clear();
+        },
+      );
+    } catch (err) {
+      console.warn("Erase all data failed", err);
+      showToast("Couldn't erase your data. Nothing was changed.");
+      return;
+    }
+    // The home-screen widget keeps its own copy of the totals and category
+    // names in native storage — blank it too, or erased data stays visible.
+    await clearWidget();
     location.reload();
   }
 

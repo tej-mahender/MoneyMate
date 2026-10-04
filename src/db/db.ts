@@ -378,6 +378,9 @@ export async function processRecurring(todayISO: string) {
 
   for (const item of items) {
     let cursor = item.nextDate;
+    // Day-of-month the series started on — keeps month-end items (29th-31st)
+    // from drifting after a short month. See advanceDate().
+    const anchorDay = Number(String(item.startDate ?? "").slice(8, 10)) || undefined;
     // Staged per-item so a mid-loop throw (invalid frequency) can be
     // discarded cleanly — pushing straight into the shared newTransactions
     // array would leave a partial, bogus transaction committed for an item
@@ -407,7 +410,7 @@ export async function processRecurring(todayISO: string) {
           recurringId: item.id,
           createdAt: Date.now(),
         });
-        cursor = advanceDate(cursor, item.frequency);
+        cursor = advanceDate(cursor, item.frequency, anchorDay);
         generated = true;
       }
     } catch (err) {
@@ -434,13 +437,34 @@ export async function processRecurring(todayISO: string) {
   });
 }
 
-export function advanceDate(iso: string, freq: Frequency): string {
+/** Last day of a 1-based month, computed in local time (no UTC round-trip). */
+function daysInMonthOf(year: number, month1: number): number {
+  return new Date(year, month1, 0).getDate();
+}
+
+/** Advances an ISO date by one `freq` step.
+ *
+ *  Monthly/yearly steps are anchored to `anchorDay` (the day-of-month the
+ *  series started on) and clamped to the target month's length, so a rent
+ *  item that starts on the 31st posts Jan 31 → Feb 28 → Mar 31 → Apr 30,
+ *  instead of overflowing (Jan 31 → Mar 3) and staying on the 3rd. Without
+ *  an anchor, the input date's own day is used (still clamped). */
+export function advanceDate(
+  iso: string,
+  freq: Frequency,
+  anchorDay?: number,
+): string {
   const d = new Date(iso + "T00:00:00");
   if (freq === "daily") d.setDate(d.getDate() + 1);
   else if (freq === "weekly") d.setDate(d.getDate() + 7);
-  else if (freq === "monthly") d.setMonth(d.getMonth() + 1);
-  else if (freq === "yearly") d.setFullYear(d.getFullYear() + 1);
-  else {
+  else if (freq === "monthly" || freq === "yearly") {
+    const wantDay =
+      anchorDay && anchorDay >= 1 && anchorDay <= 31 ? anchorDay : d.getDate();
+    const total = d.getFullYear() * 12 + d.getMonth() + (freq === "monthly" ? 1 : 12);
+    const y = Math.floor(total / 12);
+    const m0 = total % 12;
+    d.setFullYear(y, m0, Math.min(wantDay, daysInMonthOf(y, m0 + 1)));
+  } else {
     // An unrecognized frequency (only reachable via a malformed/imported
     // recurring row, since the UI only ever offers the four values above)
     // must never fall through silently — returning `iso` unchanged here

@@ -42,10 +42,39 @@ describe("advanceDate", () => {
     expect(advanceDate("2026-12-15", "monthly")).toBe("2027-01-15");
   });
   it("clamps a month-end date that does not exist in the target month (Jan 31 + 1 month)", () => {
-    // JS Date's native rollover means Jan 31 + 1 month "spills" into March
-    // (Feb 31 doesn't exist) — documenting the actual current behavior so a
-    // future change to this is a deliberate decision, not an accident.
-    expect(advanceDate("2026-01-31", "monthly")).toBe("2026-03-03");
+    // Feb 31 doesn't exist, so the step lands on the last day of February
+    // instead of spilling into March (the old behaviour gave 2026-03-03).
+    expect(advanceDate("2026-01-31", "monthly")).toBe("2026-02-28");
+  });
+  it("clamps to Feb 29 in a leap year", () => {
+    expect(advanceDate("2028-01-31", "monthly")).toBe("2028-02-29");
+  });
+  it("returns to the anchor day after a short month (Feb 28 anchored on 31 -> Mar 31)", () => {
+    expect(advanceDate("2026-02-28", "monthly", 31)).toBe("2026-03-31");
+    expect(advanceDate("2026-03-31", "monthly", 31)).toBe("2026-04-30");
+  });
+  it("walks a 31st-anchored series through a whole year without drifting", () => {
+    let d = "2026-01-31";
+    const seen: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      d = advanceDate(d, "monthly", 31);
+      seen.push(d);
+    }
+    expect(seen).toEqual([
+      "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31",
+      "2026-06-30", "2026-07-31", "2026-08-31", "2026-09-30",
+      "2026-10-31", "2026-11-30", "2026-12-31", "2027-01-31",
+    ]);
+  });
+  it("rolls Dec 31 over the year boundary correctly", () => {
+    expect(advanceDate("2026-12-31", "monthly")).toBe("2027-01-31");
+  });
+  it("clamps a yearly Feb 29 to Feb 28 in a non-leap year, and returns to Feb 29 when anchored", () => {
+    expect(advanceDate("2028-02-29", "yearly")).toBe("2029-02-28");
+    expect(advanceDate("2031-02-28", "yearly", 29)).toBe("2032-02-29");
+  });
+  it("ignores an out-of-range anchor and falls back to the input day", () => {
+    expect(advanceDate("2026-01-15", "monthly", 99)).toBe("2026-02-15");
   });
 
   // --- Security regression: this is the exact bug from the audit ---------
@@ -117,6 +146,31 @@ describe("processRecurring", () => {
       date: "2026-08-06",
       merchant: "Netflix",
     });
+  });
+
+  it("keeps a 31st-start monthly item on month ends across short months (no drift)", async () => {
+    const categoryId = await makeCategory();
+    await db.recurring.add({
+      name: "Rent",
+      type: "expense",
+      amount: 1000,
+      categoryId,
+      frequency: "monthly",
+      startDate: "2026-01-31",
+      nextDate: "2026-01-31",
+    });
+
+    await processRecurring("2026-04-30");
+
+    const txs = await db.transactions.toArray();
+    expect(txs.map((t) => t.date)).toEqual([
+      "2026-01-31",
+      "2026-02-28",
+      "2026-03-31",
+      "2026-04-30",
+    ]);
+    const rec = (await db.recurring.toArray())[0];
+    expect(rec.nextDate).toBe("2026-05-31");
   });
 
   it("backfills multiple missed occurrences in one pass (e.g. app not opened for a while)", async () => {

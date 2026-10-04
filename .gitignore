@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Release output and signing material (also ignored under android/, but a
+# keystore generated at the repo root would otherwise be committable)
+release/
+*.jks
+*.keystore
+keystore.properties

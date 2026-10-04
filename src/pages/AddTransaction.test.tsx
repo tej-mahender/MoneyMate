@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -274,5 +274,44 @@ describe("AddTransaction — split expense: only your own share is ever saved as
     await waitFor(async () => {
       expect(await db.splitShares.count()).toBe(0);
     });
+  });
+});
+
+describe("AddTransaction — save failures", () => {
+  async function seedFoodCategory() {
+    const bracketId = await db.brackets.add({
+      name: "Expenditure",
+      icon: "💳",
+      color: "#7C93F0",
+      kind: "spend",
+    });
+    return db.categories.add({
+      name: "Food",
+      icon: "🍔",
+      color: "#F0B94D",
+      budget: 10000,
+      bracketId,
+    });
+  }
+
+  it("tells the person it was NOT saved and re-enables Save when the database write fails", async () => {
+    await seedFoodCategory();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const addSpy = vi
+      .spyOn(db.transactions, "add")
+      .mockRejectedValueOnce(new Error("QuotaExceededError"));
+    const user = userEvent.setup();
+    renderAddWithToast();
+
+    await user.type(await screen.findByPlaceholderText("0.00"), "250");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText("Couldn't save that. Please try again."),
+    ).toBeInTheDocument();
+    expect(await db.transactions.count()).toBe(0);
+    expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled();
+
+    addSpy.mockRestore();
   });
 });

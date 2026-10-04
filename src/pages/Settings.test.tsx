@@ -6,6 +6,13 @@ import Settings from "./Settings";
 import { db, type Settings as SettingsType } from "../db/db";
 
 import { useUIStore } from "../store/useUIStore";
+import { clearWidget } from "../lib/widgetSync";
+
+// Only clearWidget is under test here; the real one talks to the native
+// widget bridge.
+vi.mock("../lib/widgetSync", () => ({
+  clearWidget: vi.fn().mockResolvedValue(undefined),
+}));
 
 beforeEach(async () => {
   await db.transactions.clear();
@@ -294,5 +301,51 @@ describe("Settings — Erase all data", () => {
     expect(await db.brackets.count()).toBe(0);
     expect(await db.splitShares.count()).toBe(0);
     expect(await db.budgetHistory.count()).toBe(0);
+  });
+});
+
+describe("Settings — Erase all data: widget and failure handling", () => {
+  it("blanks the home-screen widget as part of erasing", async () => {
+    vi.mocked(clearWidget).mockClear();
+    const reload = vi.fn();
+    vi.stubGlobal("location", { ...window.location, reload });
+    const originalShowConfirm = useUIStore.getState().showConfirm;
+    useUIStore.setState({ showConfirm: async () => true });
+    try {
+      const user = userEvent.setup();
+      renderSettings();
+      await user.click(await screen.findByText("Erase all data"));
+      await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    } finally {
+      useUIStore.setState({ showConfirm: originalShowConfirm });
+      vi.unstubAllGlobals();
+    }
+    expect(clearWidget).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reload or blank the widget when the erase itself fails, and says so", async () => {
+    vi.mocked(clearWidget).mockClear();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const reload = vi.fn();
+    vi.stubGlobal("location", { ...window.location, reload });
+    const txSpy = vi
+      .spyOn(db, "transaction")
+      .mockRejectedValueOnce(new Error("IDB failure"));
+    const originalShowConfirm = useUIStore.getState().showConfirm;
+    useUIStore.setState({ showConfirm: async () => true });
+    try {
+      const user = userEvent.setup();
+      renderSettings();
+      await user.click(await screen.findByText("Erase all data"));
+      await vi.waitFor(() =>
+        expect(useUIStore.getState().toastMsg).toMatch(/couldn't erase/i),
+      );
+    } finally {
+      txSpy.mockRestore();
+      useUIStore.setState({ showConfirm: originalShowConfirm });
+      vi.unstubAllGlobals();
+    }
+    expect(reload).not.toHaveBeenCalled();
+    expect(clearWidget).not.toHaveBeenCalled();
   });
 });

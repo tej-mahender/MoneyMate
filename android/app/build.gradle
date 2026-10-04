@@ -1,5 +1,32 @@
 apply plugin: 'com.android.application'
 
+// --- Release signing + versioning -------------------------------------------
+// Signing values come from android/keystore.properties (gitignored — see the
+// README). Version number/name come from android/version.properties, which
+// scripts/release.ps1 bumps, so every build you ship has a higher versionCode
+// than the last (Play and in-place updates both require that).
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+def versionProps = new Properties()
+rootProject.file("version.properties").withInputStream { versionProps.load(it) }
+
+// A release build with no signing config silently produces an UNSIGNED
+// artifact that can't be installed or uploaded — fail loudly instead.
+gradle.taskGraph.whenReady { graph ->
+    def wantsRelease = graph.allTasks.any {
+        it.name in ['assembleRelease', 'bundleRelease', 'packageRelease']
+    }
+    if (wantsRelease && !keystorePropsFile.exists()) {
+        throw new GradleException(
+            "Release build requested but android/keystore.properties is missing. " +
+            "See 'Configure Release Signing' in the README.")
+    }
+}
+
 android {
     namespace = "com.pfos.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +34,8 @@ android {
         applicationId "com.pfos.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode versionProps['versionCode'].toInteger()
+        versionName versionProps['versionName']
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +43,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystoreProps['storeFile']) {
+                // Resolved from android/ first (so ../x.jks is the repo root),
+                // then from android/app/; absolute paths work as-is.
+                def candidate = rootProject.file(keystoreProps['storeFile'])
+                storeFile candidate.exists() ? candidate : file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
