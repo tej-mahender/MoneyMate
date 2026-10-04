@@ -7,7 +7,7 @@ import {
   updateSettings,
   ensureIncomeCategoriesSeeded,
 } from "../db/db";
-import { iconBadgeStyle } from "../lib/format";
+import { iconBadgeStyle, roundMoney } from "../lib/format";
 import { PiggyBank, IndianRupee, CreditCard, X } from "lucide-react";
 import IconPicker from "../components/IconPicker";
 import moneyMateIcon from "../assets/moneymate-icon.png";
@@ -146,7 +146,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           name: c.name.trim(),
           icon: c.icon || bracket.icon,
           color: c.color,
-          budget: parseFloat(c.budget) || 0,
+          budget: roundMoney(parseFloat(c.budget) || 0),
         }))
         .filter((c) => c.name.length > 0);
 
@@ -164,7 +164,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       // correctly treated the same as an empty one.
       const categoryBudgetTotal = clean.reduce((s, c) => s + c.budget, 0);
       if (categoryBudgetTotal === 0) {
-        const amount = parseFloat(bracketAmounts[bracket.name]) || 0;
+        const amount = roundMoney(parseFloat(bracketAmounts[bracket.name]) || 0);
         if (amount > 0) {
           // No real per-category budgets for this bracket — fall back to a
           // lump-sum category matching the bracket's own step-2 amount, so

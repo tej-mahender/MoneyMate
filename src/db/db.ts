@@ -340,7 +340,9 @@ export async function getSettings(): Promise<Settings> {
     theme: "dark",
     monthlyIncome: 0,
     carryForward: false,
-    hideWidgetAmounts: false,
+    // Private by default: the home-screen widget masks balances until the
+    // person opts in to showing them (Settings).
+    hideWidgetAmounts: true,
   };
   await db.settings.put(defaults);
   return defaults;

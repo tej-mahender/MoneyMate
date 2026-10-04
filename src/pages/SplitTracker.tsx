@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import { db, type SplitShare } from "../db/db";
-import { fmtMoney, shortDate, iconBadgeStyle } from "../lib/format";
+import { fmtMoney, shortDate, iconBadgeStyle, roundMoney } from "../lib/format";
 import { ChevronLeft, ChevronRight, HandCoins, Check } from "lucide-react";
 
 /**
@@ -66,12 +66,12 @@ export default function SplitTracker({ currency }: { currency: string }) {
   }
   async function settlePartial(share: SplitShare) {
     const raw = partialDrafts[share.id!];
-    const amt = parseFloat(raw);
+    const amt = roundMoney(parseFloat(raw));
     if (!amt || amt <= 0) return;
-    const remaining = share.amountOwed - share.amountSettled;
+    const remaining = roundMoney(share.amountOwed - share.amountSettled);
     const applied = Math.min(amt, remaining);
     await db.splitShares.update(share.id!, {
-      amountSettled: share.amountSettled + applied,
+      amountSettled: roundMoney(share.amountSettled + applied),
     });
     setPartialDrafts((prev) => ({ ...prev, [share.id!]: "" }));
   }

@@ -294,6 +294,29 @@ describe("AddTransaction — save failures", () => {
     });
   }
 
+  it("saves a split without float noise (0.3 total, 0.1 to a friend -> your share is exactly 0.2)", async () => {
+    await seedFoodCategory();
+    const user = userEvent.setup();
+    renderAdd();
+
+    await user.type(await screen.findByPlaceholderText("0.00"), "0.3");
+    await user.click(
+      await screen.findByRole("button", { name: /Split this expense/i }),
+    );
+    await user.type(screen.getByPlaceholderText("Name"), "Rahul");
+    const amountInput = screen.getByPlaceholderText("Amount");
+    await user.clear(amountInput);
+    await user.type(amountInput, "0.1");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(async () => {
+      const txs = await db.transactions.toArray();
+      expect(txs).toHaveLength(1);
+      expect(txs[0].amount).toBe(0.2); // not 0.19999999999999998
+    });
+    expect((await db.splitShares.toArray())[0].amountOwed).toBe(0.1);
+  });
+
   it("tells the person it was NOT saved and re-enables Save when the database write fails", async () => {
     await seedFoodCategory();
     vi.spyOn(console, "warn").mockImplementation(() => {});

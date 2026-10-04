@@ -541,10 +541,90 @@ describe("importFullBackup — bracket/category/recurring id remapping", () => {
     });
     await expect(importFullBackup(payload)).resolves.toBeUndefined();
     const tx = (await db.transactions.toArray())[0];
-    // Falls back to the raw (unmapped) value — the rest of the app already
-    // treats any non-matching categoryId as "Uncategorized" everywhere it's
-    // displayed, so this is a safe, non-crashing degradation.
-    expect(tx.categoryId).toBe(999);
+    // Parked on 0 ("no category") — the rest of the app already treats any
+    // non-matching categoryId as "Uncategorized" everywhere it's displayed,
+    // so this is a safe, non-crashing degradation.
+    expect(tx.categoryId).toBe(0);
+  });
+
+  it("never lets a transaction with an unknown category land on a real one whose new id happens to match the old number", async () => {
+    // Category ids are re-assigned on restore. Probe what the next id will
+    // be, then make the stray transaction point at exactly that number —
+    // an id that is absent from the backup but WILL exist after restore.
+    const probe = await db.categories.add({
+      name: "probe",
+      icon: "x",
+      color: "#000000",
+      budget: 0,
+      bracketId: 0,
+    });
+    await db.categories.delete(probe);
+    const collidingId = probe + 1;
+
+    const payload = JSON.stringify({
+      categories: [
+        { id: 10, name: "A", type: "expense" },
+        { id: 11, name: "B", type: "expense" },
+      ],
+      transactions: [
+        { type: "expense", amount: 10, categoryId: collidingId, date: "2026-08-06" },
+      ],
+    });
+    await importFullBackup(payload);
+    const cats = await db.categories.toArray();
+    const tx = (await db.transactions.toArray())[0];
+    expect(cats.map((c) => c.id)).toContain(collidingId); // a real category now has that id
+    expect(tx.categoryId).toBe(0); // ...but the stray transaction is not attached to it
+  });
+
+  it("restores settings onto row 1 even after the table's auto-increment counter has moved on", async () => {
+    // Simulates a device that has already run (counter past 1) — the case
+    // every real restore hits.
+    await db.settings.put({
+      id: 1, onboarded: true, currency: "₹", theme: "dark",
+      monthlyIncome: 0, carryForward: false, hideWidgetAmounts: true,
+    });
+    await db.settings.clear();
+    await importFullBackup(
+      JSON.stringify({
+        categories: [],
+        transactions: [],
+        settings: [
+          { id: 7, onboarded: true, currency: "$", theme: "light", monthlyIncome: 5000 },
+        ],
+      }),
+    );
+    const restored = await db.settings.get(1);
+    expect(restored).toMatchObject({
+      onboarded: true,
+      currency: "$",
+      theme: "light",
+      monthlyIncome: 5000,
+    });
+    expect(await db.settings.count()).toBe(1);
+  });
+
+  it("restores widget privacy: a backup without the setting comes back masked, an explicit false stays false", async () => {
+    await importFullBackup(
+      JSON.stringify({
+        categories: [],
+        transactions: [],
+        settings: [{ id: 1, onboarded: true, currency: "₹", theme: "dark" }],
+      }),
+    );
+    expect((await db.settings.get(1))?.hideWidgetAmounts).toBe(true);
+
+    await db.settings.clear();
+    await importFullBackup(
+      JSON.stringify({
+        categories: [],
+        transactions: [],
+        settings: [
+          { id: 1, onboarded: true, currency: "₹", theme: "dark", hideWidgetAmounts: false },
+        ],
+      }),
+    );
+    expect((await db.settings.get(1))?.hideWidgetAmounts).toBe(false);
   });
 });
 

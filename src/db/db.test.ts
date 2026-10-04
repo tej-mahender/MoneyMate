@@ -339,6 +339,10 @@ describe("getSettings / updateSettings", () => {
       monthlyIncome: 0,
     });
   });
+  it("defaults the home-screen widget to masked amounts (private by default)", async () => {
+    const s = await getSettings();
+    expect(s.hideWidgetAmounts).toBe(true);
+  });
   it("persists a patch and returns the merged result", async () => {
     await getSettings(); // seed defaults first
     const updated = await updateSettings({

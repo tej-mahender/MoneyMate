@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, type TxType, type SplitShare } from "../db/db";
-import { todayISO } from "../lib/format";
+import { todayISO, roundMoney } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
 import Dropdown from "../components/Dropdown";
 import { X, Users } from "lucide-react";
@@ -149,14 +149,21 @@ export default function AddTransaction() {
   // Valid split rows: a real name and a positive amount. Rows with a blank
   // name or empty amount are just in-progress drafts, not real people yet.
   const validSplitPeople = splitPeople
-    .map((p) => ({ name: p.name.trim(), amount: parseFloat(p.amount) || 0 }))
+    .map((p) => ({
+      name: p.name.trim(),
+      amount: roundMoney(parseFloat(p.amount) || 0),
+    }))
     .filter((p) => p.name.length > 0 && p.amount > 0);
-  const splitOthersTotal = validSplitPeople.reduce((s, p) => s + p.amount, 0);
+  const splitOthersTotal = roundMoney(
+    validSplitPeople.reduce((s, p) => s + p.amount, 0),
+  );
   const isSplitting =
     type === "expense" && splitEnabled && validSplitPeople.length > 0;
-  const yourShare = isSplitting
-    ? (parseFloat(amount) || 0) - splitOthersTotal
-    : parseFloat(amount) || 0;
+  const yourShare = roundMoney(
+    isSplitting
+      ? (parseFloat(amount) || 0) - splitOthersTotal
+      : parseFloat(amount) || 0,
+  );
 
   const [splitManuallyEdited, setSplitManuallyEdited] = useState(false);
 
@@ -232,7 +239,7 @@ export default function AddTransaction() {
   }
 
   async function save(addAnother: boolean) {
-    const totalAmt = parseFloat(amount);
+    const totalAmt = roundMoney(parseFloat(amount));
     if (!totalAmt || totalAmt <= 0) {
       showToast("Enter an amount greater than 0.");
       return;

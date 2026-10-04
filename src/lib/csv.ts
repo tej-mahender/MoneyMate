@@ -469,7 +469,12 @@ export async function importFullBackup(json: string) {
       if (transactions.length) {
         const remapped = transactions.map((t) => ({
           ...t,
-          categoryId: categoryIdMap.get(t.categoryId) ?? t.categoryId,
+          // A category that isn't in the backup must NOT keep its old id:
+          // ids are re-assigned on restore, so the stale number could now
+          // point at a completely different category. 0 never exists
+          // (ids start at 1) and every screen already shows it as
+          // "Uncategorized".
+          categoryId: categoryIdMap.get(t.categoryId) ?? 0,
           recurringId:
             t.recurringId !== undefined
               ? recurringIdMap.get(t.recurringId)
@@ -721,13 +726,20 @@ function sanitizeSettings(raw: unknown[]): Settings[] {
       unknown
     >;
     return {
+      // The app only ever reads settings row 1 (getSettings). The table is
+      // auto-increment, so without an explicit id a restore on a device that
+      // has already run lands on id 2+ and is never found — settings reset
+      // to defaults right after "Backup restored".
+      id: 1,
       onboarded: s.onboarded === true,
       currency: asText(s.currency, 4) || "₹",
       theme: s.theme === "light" || s.theme === "system" ? s.theme : "dark",
       monthlyIncome: Math.max(0, asFiniteNumber(s.monthlyIncome, 0)),
       incomeSources: asOptionalText(s.incomeSources, 500),
       carryForward: s.carryForward === true,
-      hideWidgetAmounts: s.hideWidgetAmounts === true,
+      // Only an explicit `false` shows amounts; a backup that predates the
+      // setting restores to the private default.
+      hideWidgetAmounts: s.hideWidgetAmounts !== false,
     };
   });
 }

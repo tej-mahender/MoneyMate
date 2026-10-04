@@ -24,7 +24,7 @@ import {
   importFullBackup,
   downloadFile,
 } from "../lib/csv";
-import { todayISO, iconBadgeStyle } from "../lib/format";
+import { todayISO, iconBadgeStyle, roundMoney } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
 import { clearWidget } from "../lib/widgetSync";
 import IconPicker from "../components/IconPicker";
@@ -127,7 +127,7 @@ export default function Settings({
   const [rType, setRType] = useState<"expense" | "income">("expense");
 
   async function addRecurring() {
-    const amt = parseFloat(rAmount);
+    const amt = roundMoney(parseFloat(rAmount));
     if (!rName.trim() || !amt || !rCat) {
       showToast("Fill in name, amount, and category.");
       return;
@@ -169,7 +169,7 @@ export default function Settings({
     onSettingsChange(next);
   }
   async function saveIncome() {
-    const val = parseFloat(incomeDraft) || 0;
+    const val = roundMoney(parseFloat(incomeDraft) || 0);
     if (val > 0) await ensureIncomeCategoriesSeeded();
     const next = await updateSettings({ monthlyIncome: val });
     onSettingsChange(next);

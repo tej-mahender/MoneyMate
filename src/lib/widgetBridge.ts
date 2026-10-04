@@ -36,6 +36,9 @@ interface WidgetBridgePlugin {
 
 const WidgetBridge = registerPlugin<WidgetBridgePlugin>("WidgetBridge");
 
+/** In-app routes a widget tap may open. Today that's only the "+" button. */
+const ALLOWED_WIDGET_ROUTES = new Set(["/add"]);
+
 /**
  * Pushes the current month's totals to the native home-screen widget.
  * Safe to call on every Budget-screen render — it's a no-op in the browser/PWA
@@ -62,7 +65,10 @@ export async function consumePendingWidgetRoute(): Promise<string | null> {
   if (!Capacitor.isNativePlatform()) return null;
   try {
     const { route } = await WidgetBridge.getPendingRoute();
-    return route || null;
+    // The native side stores whatever route an incoming intent carries, and
+    // MainActivity is exported — so only routes the widget itself can ask
+    // for are honoured; anything else is dropped.
+    return route && ALLOWED_WIDGET_ROUTES.has(route) ? route : null;
   } catch (err) {
     console.warn("Reading pending widget route failed", err);
     return null;

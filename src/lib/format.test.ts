@@ -3,6 +3,7 @@ import {
   todayISO,
   monthKey,
   fmtMoney,
+  roundMoney,
   monthLabel,
   shortDate,
   longDate,
@@ -77,6 +78,31 @@ describe("fmtMoney", () => {
   });
   it("formats zero without a sign", () => {
     expect(fmtMoney(0, "$")).toBe("$0");
+  });
+});
+
+describe("roundMoney", () => {
+  it("removes float noise (0.1 + 0.2 -> 0.3)", () => {
+    expect(0.1 + 0.2).not.toBe(0.3);
+    expect(roundMoney(0.1 + 0.2)).toBe(0.3);
+  });
+  it("rounds to 2 decimal places, half up", () => {
+    expect(roundMoney(10.005)).toBe(10.01);
+    expect(roundMoney(99.999)).toBe(100);
+    expect(roundMoney(333.34000000000003)).toBe(333.34);
+  });
+  it("leaves already-clean values and whole numbers alone", () => {
+    expect(roundMoney(250)).toBe(250);
+    expect(roundMoney(12.5)).toBe(12.5);
+  });
+  it("never returns -0 and maps non-finite input to 0", () => {
+    expect(Object.is(roundMoney(-0), 0)).toBe(true);
+    expect(Object.is(roundMoney(-0.0001), 0)).toBe(true);
+    expect(roundMoney(NaN)).toBe(0);
+    expect(roundMoney(Infinity)).toBe(0);
+  });
+  it("keeps negatives negative", () => {
+    expect(roundMoney(-1.005)).toBe(-1);
   });
 });
 
