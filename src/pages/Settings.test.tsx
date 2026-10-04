@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -216,12 +216,12 @@ describe("Settings — export/import backup, end to end through the real UI", ()
       "Restore from backup",
     ) as HTMLInputElement;
 
-    const originalConfirm = window.confirm;
-    window.confirm = () => true;
+    const originalShowConfirm = useUIStore.getState().showConfirm;
+    useUIStore.setState({ showConfirm: async () => true });
     try {
       await user.upload(fileInput, badFile);
     } finally {
-      window.confirm = originalConfirm;
+      useUIStore.setState({ showConfirm: originalShowConfirm });
     }
 
     expect(await screen.findByText("Invalid backup file")).toBeInTheDocument();
@@ -251,18 +251,48 @@ describe("Settings — export/import backup, end to end through the real UI", ()
     const fileInput = screen.getByLabelText(
       "Restore from backup",
     ) as HTMLInputElement;
-    const originalConfirm = window.confirm;
-    window.confirm = () => false; // person taps Cancel
+    const originalShowConfirm = useUIStore.getState().showConfirm;
+    useUIStore.setState({ showConfirm: async () => false }); // person taps Cancel
     try {
       await user.upload(
         fileInput,
         new File([backupJson], "backup.json", { type: "application/json" }),
       );
     } finally {
-      window.confirm = originalConfirm;
+      useUIStore.setState({ showConfirm: originalShowConfirm });
     }
 
     expect(screen.queryByText("Backup restored.")).not.toBeInTheDocument();
     expect(await db.categories.count()).toBe(1); // untouched
+  });
+});
+
+describe("Settings — Erase all data", () => {
+  it("wipes everything, including split-expense records and the budget history", async () => {
+    const bracketId = await db.brackets.add({ name: "Expenditure", icon: "💳", color: "#7C93F0", kind: "spend" });
+    const catId = await db.categories.add({ name: "Dinner", icon: "🍽", color: "#F0B94D", budget: 1000, bracketId });
+    const txId = await db.transactions.add({ type: "expense", amount: 500, categoryId: catId, date: "2026-10-01", createdAt: 0 });
+    await db.splitShares.add({ transactionId: txId, personName: "Rahul", amountOwed: 250, amountSettled: 0, createdAt: 0 });
+    await db.budgetHistory.add({ categoryId: catId, month: "2026-10", budget: 1000, origin: "migrated", createdAt: 0 });
+
+    const reload = vi.fn();
+    vi.stubGlobal("location", { ...window.location, reload });
+    const originalShowConfirm = useUIStore.getState().showConfirm;
+    useUIStore.setState({ showConfirm: async () => true });
+    try {
+      const user = userEvent.setup();
+      renderSettings();
+      await user.click(await screen.findByText("Erase all data"));
+      await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    } finally {
+      useUIStore.setState({ showConfirm: originalShowConfirm });
+      vi.unstubAllGlobals();
+    }
+
+    expect(await db.transactions.count()).toBe(0);
+    expect(await db.categories.count()).toBe(0);
+    expect(await db.brackets.count()).toBe(0);
+    expect(await db.splitShares.count()).toBe(0);
+    expect(await db.budgetHistory.count()).toBe(0);
   });
 });

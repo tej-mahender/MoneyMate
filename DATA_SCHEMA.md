@@ -143,3 +143,17 @@ intentional: the app's entire privacy premise is that nothing leaves the device
 without you choosing to move it. An ML or Power BI workflow built on top of this
 data is something you run yourself, on your own exported file, not something the
 app does on your behalf in the background.
+
+
+## budgetHistory (backup schema v7)
+
+Per-category budget timeline so a closed month is reported against the cap that applied then.
+
+| Field | Meaning |
+|---|---|
+| categoryId | Category the cap belongs to |
+| month | `yyyy-mm` the budget first applies from |
+| budget | Effective cap (0 while the category is archived) |
+| origin | `migrated` (existed when tracking began), `created` (did not exist before `month`), `edited` |
+
+A month's budget is the latest row with `month` <= that month. The current month always uses the live category value.

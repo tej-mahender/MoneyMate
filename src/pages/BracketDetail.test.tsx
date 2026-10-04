@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import BracketDetail from './BracketDetail';
 import { db } from '../db/db';
 import { monthKey, todayISO } from '../lib/format';
+import { useUIStore } from '../store/useUIStore';
 
 beforeEach(async () => {
   await db.transactions.clear();
@@ -14,9 +15,17 @@ beforeEach(async () => {
   await db.settings.clear();
 });
 
+const realShowConfirm = useUIStore.getState().showConfirm;
 afterEach(() => {
   vi.restoreAllMocks();
+  useUIStore.setState({ showConfirm: realShowConfirm });
 });
+
+// The app confirms through its in-app dialog (useUIStore.showConfirm), not
+// window.confirm — stub that to answer every prompt the same way.
+function answerConfirms(answer: boolean) {
+  useUIStore.setState({ showConfirm: async () => answer });
+}
 
 function renderBracket(id: number) {
   return render(
@@ -55,7 +64,7 @@ describe('BracketDetail — archive/delete a bracket', () => {
 
   it('deleting an empty bracket, confirmed, removes it entirely', async () => {
     const id = await makeBracket('Unused Bracket');
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    answerConfirms(true);
     const user = userEvent.setup();
     renderBracket(id);
 
@@ -67,7 +76,7 @@ describe('BracketDetail — archive/delete a bracket', () => {
 
   it('deleting an empty bracket, cancelled at the confirm, leaves it untouched', async () => {
     const id = await makeBracket('Unused Bracket');
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    answerConfirms(false);
     const user = userEvent.setup();
     renderBracket(id);
 
@@ -76,17 +85,18 @@ describe('BracketDetail — archive/delete a bracket', () => {
     expect(await db.brackets.get(id)).toBeDefined();
   });
 
-  it('a bracket with categories: declining the delete-confirm falls back to archiving (bracket AND its categories survive, just hidden)', async () => {
+  it('a bracket with categories: declining the delete-confirm leaves the bracket and its categories untouched (archiving is its own button)', async () => {
     const id = await makeBracket('Savings');
     const catId = await db.categories.add({ name: 'Emergency Fund', icon: '💰', color: '#4FD9B8', budget: 5000, bracketId: id });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    answerConfirms(false);
     const user = userEvent.setup();
     renderBracket(id);
 
     await user.click(await screen.findByText('Delete bracket'));
 
     const bracket = await db.brackets.get(id);
-    expect(bracket?.archived).toBe(true);
+    expect(bracket).toBeDefined();
+    expect(bracket?.archived).toBeFalsy();
     expect(await db.categories.get(catId)).toBeDefined();
   });
 
@@ -94,7 +104,7 @@ describe('BracketDetail — archive/delete a bracket', () => {
     const id = await makeBracket('Savings');
     const catId = await db.categories.add({ name: 'Emergency Fund', icon: '💰', color: '#4FD9B8', budget: 5000, bracketId: id });
     await db.transactions.add({ type: 'expense', amount: 1000, categoryId: catId, date: '2026-08-05', createdAt: Date.now() });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    answerConfirms(true);
     const user = userEvent.setup();
     renderBracket(id);
 

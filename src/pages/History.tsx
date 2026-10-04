@@ -24,7 +24,12 @@ export default function History({ currency }: { currency: string }) {
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
-  const [month, setMonth] = useState(monthKey(todayISO()));
+  const requestedMonth = params.get("month");
+  const [month, setMonth] = useState(
+    requestedMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth)
+      ? requestedMonth
+      : monthKey(todayISO()),
+  );
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"list" | "calendar">("list");
   const [dayFilter, setDayFilter] = useState<string | null>(null);
@@ -60,24 +65,7 @@ export default function History({ currency }: { currency: string }) {
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
 
-  // The snapshot below is deliberately unaffected by catFilter/dayFilter/
-  // search — it answers "how did this whole month go", not "how does my
-  // current filtered view look". Filtering to one category shouldn't make
-  // the snapshot shrink down to match; the transaction list below it is
-  // where the active filters actually apply.
-  const monthTx = allTx.filter((t) => monthKey(t.date) === month);
-  const monthSpent = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const byCategory = (() => {
-    const totals = new Map<number, number>();
-    for (const t of monthTx) {
-      if (t.type !== "expense") continue;
-      totals.set(t.categoryId, (totals.get(t.categoryId) ?? 0) + t.amount);
-    }
-    return [...totals.entries()]
-      .map(([categoryId, total]) => ({ categoryId, total, cat: catMap.get(categoryId) }))
-      .sort((a, b) => b.total - a.total);
-  })();
+  const monthHasTx = allTx.some((t) => monthKey(t.date) === month);
 
   async function del(t: Transaction) {
     // A split expense's IOU rows point at this transaction — deleting it
@@ -196,37 +184,14 @@ export default function History({ currency }: { currency: string }) {
           </div>
         )}
 
-        {monthTx.length > 0 && (
-          <div className="card">
-            <h2>{monthLabel(month)} snapshot</h2>
-            <div className="grid-3" style={{ gridTemplateColumns: monthIncome > 0 ? "1fr 1fr" : "1fr", marginBottom: byCategory.length > 0 ? 16 : 0 }}>
-              <div>
-                <div className="label">Spent</div>
-                <div className="value">{fmtMoney(monthSpent, currency)}</div>
-              </div>
-              {monthIncome > 0 && (
-                <div className="pos">
-                  <div className="label">Income</div>
-                  <div className="value">{fmtMoney(monthIncome, currency)}</div>
-                </div>
-              )}
-            </div>
-            {byCategory.map(({ categoryId, total, cat }) => (
-              <div
-                key={categoryId}
-                className="tx tx-link"
-                onClick={() => setParams({ cat: String(categoryId) })}
-              >
-                <div className="tx-left">
-                  <div className="tx-icon" style={iconBadgeStyle(cat?.color)}>
-                    {cat?.icon || "＊"}
-                  </div>
-                  <div className="tx-cat">{cat?.name || "Uncategorized"}</div>
-                </div>
-                <span className="tx-amt">{fmtMoney(total, currency)}</span>
-              </div>
-            ))}
-          </div>
+        {monthHasTx && (
+          <button
+            className="btn small secondary"
+            style={{ marginBottom: 12, width: "100%" }}
+            onClick={() => navigate(`/budget?month=${month}`)}
+          >
+            {monthLabel(month)} budget review →
+          </button>
         )}
 
         <div className="card" data-testid="transaction-list">

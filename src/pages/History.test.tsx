@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import History from './History';
 import { db } from '../db/db';
-import { monthKey, todayISO, monthLabel, fmtMoney } from '../lib/format';
+import { monthKey, todayISO, monthLabel } from '../lib/format';
 
 beforeEach(async () => {
   await db.transactions.clear();
@@ -57,9 +57,7 @@ describe('History — filtering', () => {
     // "Rent" legitimately appears twice here — once as the active-filter
     // chip label, once as the transaction row's category name.
     expect((await screen.findAllByText('Rent')).length).toBeGreaterThan(0);
-    // "Food" is expected to still appear in the whole-month snapshot above
-    // the list (it deliberately ignores the active filter) — what matters
-    // is that the FILTERED TRANSACTION LIST itself excludes it.
+    // What matters is that the FILTERED TRANSACTION LIST excludes Food.
     const list = screen.getByTestId('transaction-list');
     expect(within(list).queryByText('Food')).not.toBeInTheDocument();
   });
@@ -93,8 +91,6 @@ describe('History — filtering', () => {
     const thisMonth = monthKey(todayISO());
     await db.transactions.add({ type: 'expense', amount: 500, categoryId: 9999, date: `${thisMonth}-10`, createdAt: Date.now() });
     renderHistory();
-    // Appears in both the snapshot's category breakdown and the
-    // transaction row itself — both correctly fall back to this.
     expect((await screen.findAllByText('Uncategorized')).length).toBeGreaterThan(0);
   });
 });
@@ -151,54 +147,37 @@ describe('History — navigation', () => {
   });
 });
 
-describe('History — month snapshot', () => {
-  it("shows the whole month's total and a category breakdown, unaffected by an active category filter", async () => {
-    const rentId = await makeCategory('Rent');
-    const foodId = await makeCategory('Food');
-    const thisMonth = monthKey(todayISO());
-    await db.transactions.add({ type: 'expense', amount: 5000, categoryId: rentId, date: `${thisMonth}-10`, createdAt: Date.now() });
-    await db.transactions.add({ type: 'expense', amount: 500, categoryId: foodId, date: `${thisMonth}-12`, createdAt: Date.now() });
-
-    renderHistory(`/history?cat=${rentId}`);
-
-    await screen.findByText(`${monthLabel(thisMonth)} snapshot`);
-    // Both categories show in the snapshot even though the list is
-    // filtered to Rent only — the snapshot represents the whole month.
-    expect((await screen.findAllByText('Food')).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText(fmtMoney(5500, '₹'))).length).toBeGreaterThan(0);
-  });
-
-  it('shows an Income tile only when the month actually has income logged', async () => {
+describe('History — budget review link', () => {
+  it('links to the Budget screen\'s review of the month being viewed, only when that month has transactions', async () => {
     const rentId = await makeCategory('Rent');
     const thisMonth = monthKey(todayISO());
     await db.transactions.add({ type: 'expense', amount: 5000, categoryId: rentId, date: `${thisMonth}-10`, createdAt: Date.now() });
-
-    renderHistory();
-
-    await screen.findByText(`${monthLabel(thisMonth)} snapshot`);
-    expect(screen.queryByText('Income')).not.toBeInTheDocument();
-  });
-
-  it('tapping a category in the snapshot applies it as the active filter', async () => {
-    const rentId = await makeCategory('Rent');
-    const foodId = await makeCategory('Food');
-    const thisMonth = monthKey(todayISO());
-    await db.transactions.add({ type: 'expense', amount: 5000, categoryId: rentId, date: `${thisMonth}-10`, createdAt: Date.now() });
-    await db.transactions.add({ type: 'expense', amount: 500, categoryId: foodId, date: `${thisMonth}-12`, createdAt: Date.now() });
     const user = userEvent.setup();
 
-    renderHistory();
-    await screen.findByText(`${monthLabel(thisMonth)} snapshot`);
-
-    const foodRows = screen.getAllByText('Food');
-    await user.click(foodRows[0].closest('.tx-link')!);
-
-    const list = screen.getByTestId('transaction-list');
-    expect(within(list).queryByText('Rent')).not.toBeInTheDocument();
+    render(
+      <MemoryRouter initialEntries={['/history']}>
+        <Routes>
+          <Route path="/history" element={<History currency="₹" />} />
+          <Route path="/budget" element={<div>Budget screen</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByText(`${monthLabel(thisMonth)} budget review →`));
+    expect(await screen.findByText('Budget screen')).toBeInTheDocument();
   });
 
-  it('does not render at all when the selected month has no transactions', async () => {
+  it('shows no review link when the month has no transactions, and no longer renders a snapshot card', async () => {
     renderHistory();
+    await screen.findByText('Nothing here yet.');
+    expect(screen.queryByText(/budget review/)).not.toBeInTheDocument();
     expect(screen.queryByText(/snapshot/)).not.toBeInTheDocument();
+  });
+
+  it('opens on the month given in ?month= (deep link from the budget review)', async () => {
+    const rentId = await makeCategory('Rent');
+    const prev = '2026-03';
+    await db.transactions.add({ type: 'expense', amount: 700, categoryId: rentId, date: `${prev}-10`, createdAt: Date.now(), merchant: 'March Landlord' });
+    renderHistory(`/history?month=${prev}`);
+    expect(await screen.findByText(/March Landlord/)).toBeInTheDocument();
   });
 });

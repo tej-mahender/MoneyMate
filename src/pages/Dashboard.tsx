@@ -1,11 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, computeMonthSummary } from "../db/db";
 import {
   fmtMoney,
   monthKey,
   monthLabel,
+  addMonths,
   todayISO,
   shortDate,
   daysInMonth,
@@ -14,8 +15,9 @@ import {
 } from "../lib/format";
 import CategoryRow from "../components/CategoryRow";
 import Ring from "../components/Ring";
+import MonthReview from "../components/MonthReview";
 import { syncWidget } from "../lib/widgetBridge";
-import { Wallet, Receipt } from "lucide-react";
+import { Wallet, Receipt, ChevronLeft, ChevronRight, CalendarCheck, X } from "lucide-react";
 
 // The Budget screen — capped spending categories only (Rent, Food,
 // Transport…), aggregated across every 'spend'-kind bracket (usually just
@@ -24,6 +26,24 @@ import { Wallet, Receipt } from "lucide-react";
 // Home ("/"), which is where you land after onboarding and where "money
 // you haven't given a job to" is front and center. See db.ts BracketKind
 // for the full model.
+// The month-end prompt is dismissed per month and remembered on-device only
+// (nothing here is data worth putting in the database or a backup).
+const REVIEW_PROMPT_KEY = "moneymate.reviewPromptDismissed";
+function readPromptDismissed(): string | null {
+  try {
+    return localStorage.getItem(REVIEW_PROMPT_KEY);
+  } catch {
+    return null;
+  }
+}
+function writePromptDismissed(month: string) {
+  try {
+    localStorage.setItem(REVIEW_PROMPT_KEY, month);
+  } catch {
+    /* private mode / storage disabled — the prompt just returns next visit */
+  }
+}
+
 export default function Dashboard({
   currency,
   hideWidgetAmounts,
@@ -33,6 +53,48 @@ export default function Dashboard({
 }) {
   const navigate = useNavigate();
   const curMonth = monthKey(todayISO());
+  const [params] = useSearchParams();
+  // The month being viewed: the live month by default, or any earlier month
+  // (read-only review). ?month=yyyy-mm deep-links straight to one, e.g. from
+  // History. A future or malformed value falls back to the live month.
+  const requested = params.get("month");
+  const [viewMonth, setViewMonth] = useState(
+    requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && requested < curMonth
+      ? requested
+      : curMonth,
+  );
+  const isPast = viewMonth < curMonth;
+  // First week of a new month: offer last month's review once, if there is
+  // anything to review.
+  const prevMonth = addMonths(curMonth, -1);
+  const prevMonthTxCount =
+    useLiveQuery(
+      () => db.transactions.where("date").startsWith(prevMonth).count(),
+      [prevMonth],
+    ) ?? 0;
+  const [promptDismissed, setPromptDismissed] = useState(
+    () => readPromptDismissed() === prevMonth,
+  );
+  const showReviewPrompt =
+    !isPast &&
+    Number(todayISO().slice(8, 10)) <= 7 &&
+    prevMonthTxCount > 0 &&
+    !promptDismissed;
+  function dismissPrompt() {
+    writePromptDismissed(prevMonth);
+    setPromptDismissed(true);
+  }
+  // Earliest month with any data, so the back arrow stops where there is
+  // nothing to review instead of paging through empty years.
+  const earliestMonth =
+    useLiveQuery(async () => {
+      const first = await db.transactions.orderBy("date").first();
+      const hist = await db.budgetHistory.orderBy("month").first();
+      const cands = [first ? monthKey(first.date) : null, hist?.month ?? null].filter(
+        (m): m is string => !!m,
+      );
+      return cands.length ? cands.sort()[0] : curMonth;
+    }, [curMonth]) ?? curMonth;
 
   const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
   const spendBracketIds = new Set(
@@ -158,9 +220,74 @@ export default function Dashboard({
       <header className="topbar">
         <div className="eyebrow">Money Mate</div>
         <h1>Budget</h1>
-        <div className="sub">{monthLabel(curMonth)}</div>
+        <div
+          className="sub"
+          style={{ display: "flex", alignItems: "center", gap: 4 }}
+        >
+          <button
+            className="icon-btn"
+            aria-label="Previous month"
+            disabled={viewMonth <= earliestMonth}
+            onClick={() => setViewMonth((m) => addMonths(m, -1))}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span>{monthLabel(viewMonth)}</span>
+          <button
+            className="icon-btn"
+            aria-label="Next month"
+            disabled={!isPast}
+            onClick={() => setViewMonth((m) => addMonths(m, 1))}
+          >
+            <ChevronRight size={16} />
+          </button>
+          {isPast && (
+            <button
+              className="btn small secondary"
+              style={{ marginLeft: "auto" }}
+              onClick={() => setViewMonth(curMonth)}
+            >
+              This month
+            </button>
+          )}
+        </div>
       </header>
       <div className="content">
+        {isPast ? (
+          <MonthReview
+            month={viewMonth}
+            currency={currency}
+            onOpenCategory={(id) =>
+              navigate(`/history?cat=${id}&month=${viewMonth}`)
+            }
+          />
+        ) : (
+        <>
+        {showReviewPrompt && (
+          <div className="card review-prompt">
+            <CalendarCheck size={20} className="review-prompt-icon" />
+            <div className="review-prompt-text">
+              <b>{monthLabel(prevMonth)} is wrapped up</b>
+              <span className="muted">See how it went against your budget.</span>
+            </div>
+            <button
+              className="btn small"
+              onClick={() => {
+                dismissPrompt();
+                setViewMonth(prevMonth);
+              }}
+            >
+              Review
+            </button>
+            <button
+              className="icon-btn"
+              aria-label="Dismiss"
+              onClick={dismissPrompt}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
         <div className="grid-3">
           <div>
             <div className="label">Budgeted</div>
@@ -292,6 +419,8 @@ export default function Dashboard({
             })
           )}
         </div>
+        </>
+        )}
       </div>
     </>
   );

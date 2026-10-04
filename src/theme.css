@@ -693,11 +693,227 @@ label:has(+ .sr-only:focus-visible) {
   border: none;
 }
 
-/* "Where it went" donut chart — labels are drawn directly in the SVG via
-   renderPieLabel() in Analytics.tsx (leader lines + text), so there's
-   nothing to style here beyond the chart's own positioning. */
+/* "Where it went" donut — total/selection sits in the hole, and a ranked
+   legend below carries every name, share and amount (no leader lines). */
 .pie-chart-wrap {
   position: relative;
+  width: 100%;
+  max-width: 252px;
+  margin: 4px auto 0;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pie-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  animation: pie-in 0.6s ease-out both;
+}
+
+.pie-arc {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.2s, stroke-width 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes pie-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pie-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  padding: 0 25%;
+}
+
+.pie-center-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pie-center-value {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 2px 0;
+}
+
+.pie-center-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.pie-legend {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.pie-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 11px 8px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--surface-border);
+  border-radius: 10px;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.pie-legend li:last-child .pie-row {
+  border-bottom-color: transparent;
+}
+
+.pie-row.active {
+  background: var(--surface-strong);
+}
+
+.pie-row.dim {
+  opacity: 0.45;
+}
+
+.pie-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.pie-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pie-pct {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  min-width: 38px;
+  text-align: right;
+}
+
+.pie-amt {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 70px;
+  text-align: right;
+}
+
+.pie-more {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.pie-more:hover {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+/* "Vs. last month" movers */
+.vs-total {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vs-total b {
+  font-family: var(--display);
+  font-size: 22px;
+}
+
+.vs-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--surface-border);
+  font-size: 13.5px;
+}
+
+.vs-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-amt {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.vs-delta {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 78px;
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+.vs-delta.up {
+  color: var(--over);
+}
+
+.vs-delta.down {
+  color: var(--good);
 }
 
 /* Transaction detail page */
@@ -1463,4 +1679,29 @@ label:has(+ .sr-only:focus-visible) {
     padding-bottom: 20px;
   }
 
+}
+
+/* Month-end "review last month" prompt on the Budget screen */
+.review-prompt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-prompt-icon {
+  flex-shrink: 0;
+  color: var(--gold);
+}
+
+.review-prompt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.review-prompt-text .muted {
+  font-size: 12px;
 }

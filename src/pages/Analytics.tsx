@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/db";
 import {
@@ -14,7 +14,6 @@ import {
 } from "../lib/format";
 import {
   PieChart as PieChartIcon,
-  BarChart3,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -22,9 +21,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import {
-  PieChart,
-  Pie,
-  Cell,
   Tooltip,
   ResponsiveContainer,
   LineChart,
@@ -37,110 +33,86 @@ import {
   Legend,
   AreaChart,
   Area,
-  type PieLabelRenderProps,
 } from "recharts";
 
-const RADIAN = Math.PI / 180;
-// Must match the <ResponsiveContainer height> the pie chart renders at —
-// used to keep decluttered labels from drifting outside the visible card.
-const PIE_CHART_HEIGHT = 300;
+// Donut geometry (SVG viewBox units). Drawn by hand rather than through
+// Recharts' <Pie>: its sector hit-testing made taps land on neighbouring
+// slices, and a hand-built ring gives exact control over gaps and selection.
+const DONUT_SIZE = 252;
+const DONUT_R = 86; // ring centre-line radius
+const DONUT_THICK = 32;
+const DONUT_GAP_PX = 3; // visible gap between neighbouring slices
+const DONUT_CORNER = 5; // corner rounding radius
+const DONUT_GROW = 4; // how far the selected slice swells
 
-type PieLabelEntry = {
-  name: string;
-  value: number;
-  color: string;
-  sx: number;
-  sy: number;
-  mx: number;
-  my: number;
-  ex: number;
-  ey: number;
-  textAnchor: "start" | "end";
-};
-
-/** Precomputes every slice's label position in one pass (rather than each
- *  slice guessing its own spot independently), so labels can be pushed apart
- *  when the pie has several thin slices bunched at similar angles — e.g. a
- *  handful of small, similarly-sized expense categories all near the top of
- *  the ring, which previously produced overlapping, unreadable text. Slices
- *  are grouped into a left and right column (matching which side of the pie
- *  they point toward) and each column is vertically decluttered independently,
- *  then clamped so the whole label stack stays inside the chart's height. */
-function computePieLabelLayout(
-  cx: number,
-  cy: number,
-  outerRadius: number,
-  data: { name: string; value: number; color: string }[],
-): PieLabelEntry[] {
-  const total = data.reduce((s, d) => s + d.value, 0) || 1;
-  const MIN_GAP = 32; // vertical px between stacked two-line labels
-  const TOP_BOUND = cy - PIE_CHART_HEIGHT / 2 + 16;
-  const BOTTOM_BOUND = cy + PIE_CHART_HEIGHT / 2 - 16;
-
-  let cumAngle = 90; // matches this chart's Pie startAngle={90} endAngle={-270}
-  type Raw = PieLabelEntry & { rightSide: boolean };
-  const raw: Raw[] = [];
-  for (const d of data) {
-    const percent = d.value / total;
-    const sweep = percent * 360;
-    const midAngle = cumAngle - sweep / 2;
-    cumAngle -= sweep;
-    if (percent < 0.01) continue; // sub-1% slivers stay unlabeled to avoid clutter
-    const sin = Math.sin(-RADIAN * midAngle);
-    const cos = Math.cos(-RADIAN * midAngle);
-    const rightSide = cos >= 0;
-    raw.push({
-      name: d.name,
-      value: d.value,
-      color: d.color,
-      sx: cx + (outerRadius + 6) * cos,
-      sy: cy + (outerRadius + 6) * sin,
-      mx: cx + (outerRadius + 20) * cos,
-      my: cy + (outerRadius + 20) * sin,
-      ex: cx + (rightSide ? 1 : -1) * (outerRadius + 40),
-      ey: cy + (outerRadius + 20) * sin,
-      textAnchor: rightSide ? "start" : "end",
-      rightSide,
-    });
-  }
-
-  function declutter(list: Raw[]) {
-    list.sort((a, b) => a.ey - b.ey);
-    // Forward pass: push each label down if it's too close to the one above.
-    for (let i = 1; i < list.length; i++) {
-      if (list[i].ey - list[i - 1].ey < MIN_GAP) {
-        list[i].ey = list[i - 1].ey + MIN_GAP;
-      }
+/** Annular sector with rounded corners. The shape is inset by the corner
+ *  radius and then stroked with a round-joined stroke of the same colour,
+ *  which rounds every corner to that radius. */
+function sectorPath(
+  start: number,
+  sweep: number,
+  grow: number,
+): { d: string; cr: number } {
+  // Thin slices get a smaller corner radius so they stay a visible pill of
+  // exactly their allotted width instead of bloating into their neighbours.
+  const arcLen = ((sweep * Math.PI) / 180) * DONUT_R;
+  const cr = Math.min(DONUT_CORNER, Math.max(0.5, (arcLen - DONUT_GAP_PX) / 2 - 0.5));
+  const c = DONUT_SIZE / 2;
+  const rOut = DONUT_R + DONUT_THICK / 2 + grow - cr;
+  const rIn = DONUT_R - DONUT_THICK / 2 - grow + cr;
+  const inset = DONUT_GAP_PX / 2 + cr; // px from the slice edge
+  const pt = (r: number, a: number) => {
+    const rad = (a * Math.PI) / 180;
+    return `${(c + r * Math.sin(rad)).toFixed(2)} ${(c - r * Math.cos(rad)).toFixed(2)}`;
+  };
+  const span = (r: number) => {
+    const d = (inset / r) * (180 / Math.PI); // constant pixel gap at every radius
+    let a1 = start + d;
+    let a2 = start + sweep - d;
+    if (a2 - a1 < 0.2) {
+      const mid = start + sweep / 2;
+      a1 = mid - 0.1;
+      a2 = mid + 0.1;
     }
-    // Backward pass: pull labels back up so the whole stack settles as close
-    // to its original, angle-driven positions as spacing allows, rather than
-    // permanently sagging toward the bottom of the chart.
-    for (let i = list.length - 2; i >= 0; i--) {
-      if (list[i + 1].ey - list[i].ey < MIN_GAP) {
-        list[i].ey = list[i + 1].ey - MIN_GAP;
-      }
-    }
-    // Clamp the whole stack inside the chart's vertical bounds by shifting
-    // it as a block, preserving the spacing just established above.
-    if (list.length > 0) {
-      if (list[0].ey < TOP_BOUND) {
-        const shift = TOP_BOUND - list[0].ey;
-        list.forEach((it) => (it.ey += shift));
-      }
-      if (list[list.length - 1].ey > BOTTOM_BOUND) {
-        const shift = BOTTOM_BOUND - list[list.length - 1].ey;
-        list.forEach((it) => (it.ey += shift));
-      }
-    }
-  }
-
-  const rightItems = raw.filter((r) => r.rightSide);
-  const leftItems = raw.filter((r) => !r.rightSide);
-  declutter(rightItems);
-  declutter(leftItems);
-
-  return [...rightItems, ...leftItems];
+    return [a1, a2] as const;
+  };
+  const [o1, o2] = span(rOut);
+  const [i1, i2] = span(rIn);
+  return {
+    cr,
+    d:
+    `M${pt(rOut, o1)}A${rOut} ${rOut} 0 ${o2 - o1 > 180 ? 1 : 0} 1 ${pt(rOut, o2)}` +
+    `L${pt(rIn, i2)}A${rIn} ${rIn} 0 ${i2 - i1 > 180 ? 1 : 0} 0 ${pt(rIn, i1)}Z`,
+  };
 }
+
+// Slice colours are assigned by rank (not from each category's own colour)
+// so no two slices ever share a hue; adjacent ranks are deliberately far
+// apart on the colour wheel. Past the curated set, hues keep coming from a
+// golden-angle sweep so every category still gets its own colour.
+const PIE_PALETTE = [
+  "#F5B84B", // amber
+  "#4FB3F5", // sky
+  "#FF6B6B", // coral
+  "#3DDC97", // mint
+  "#A78BFA", // violet
+  "#F472B6", // pink
+  "#B8E04A", // lime
+  "#22D3EE", // cyan
+  "#FB923C", // orange
+  "#D946EF", // magenta
+  "#14B8A6", // teal
+  "#818CF8", // periwinkle
+];
+const pieColor = (i: number) =>
+  i < PIE_PALETTE.length
+    ? PIE_PALETTE[i]
+    : `hsl(${Math.round((i * 137.508) % 360)} 68% 62%)`;
+// Slices smaller than this still get a visible sliver of the ring.
+const PIE_MIN_SWEEP = 5;
+// The legend opens on the biggest few categories; the rest sit behind a
+// "Show all" toggle so a long tail doesn't push the other cards off screen.
+const LEGEND_PREVIEW = 5;
 
 type Range = "month" | "3m" | "6m" | "1y" | "all";
 const RANGE_MONTHS: Record<Range, number> = {
@@ -181,7 +153,6 @@ export default function Analytics({ currency }: { currency: string }) {
   const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
   const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
   const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
-  const spendBracketIds = new Set(brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id));
   // Money moved into an allocation bracket (Savings/Investments/EMI…) is
   // logged as an ordinary expense-type transaction, but it isn't spend —
   // Dashboard already excludes it from "Spent"; every figure derived from
@@ -224,11 +195,6 @@ export default function Analytics({ currency }: { currency: string }) {
     (t) => t.type === "expense" && !allocationCategoryIds.has(t.categoryId),
   );
 
-  // This-month-only slice, since budgets are inherently monthly
-  const monthTx = txs.filter(
-    (t) => monthKey(t.date) === curMonth && t.type === "expense",
-  );
-
   const pieData = useMemo(() => {
     const byCat = new Map<number, number>();
     rangeExpenses.forEach((t) =>
@@ -242,6 +208,54 @@ export default function Analytics({ currency }: { currency: string }) {
       }))
       .sort((a, b) => b.value - a.value);
   }, [rangeExpenses, categories]);
+
+  // Month-over-month movers. For the month still in progress, last month is
+  // cut off at the same day so the comparison is like-for-like.
+  const vsPrev = useMemo(() => {
+    if (range !== "month") return null;
+    const prevMonth = addMonths(curMonth, -1);
+    const partial = curMonth === todayMonth;
+    const dayCap = partial ? todayISO().slice(8, 10) : "31";
+    const cur = new Map<number, number>();
+    const prev = new Map<number, number>();
+    for (const t of txs) {
+      if (t.type !== "expense" || allocationCategoryIds.has(t.categoryId)) continue;
+      const m = monthKey(t.date);
+      if (m === curMonth) cur.set(t.categoryId, (cur.get(t.categoryId) ?? 0) + t.amount);
+      else if (m === prevMonth && t.date.slice(8, 10) <= dayCap)
+        prev.set(t.categoryId, (prev.get(t.categoryId) ?? 0) + t.amount);
+    }
+    const curTotal = [...cur.values()].reduce((a, b) => a + b, 0);
+    const prevTotal = [...prev.values()].reduce((a, b) => a + b, 0);
+    if (prevTotal === 0) return null; // nothing to compare against
+    const ids = new Set([...cur.keys(), ...prev.keys()]);
+    const movers = [...ids]
+      .map((id) => {
+        const c = cur.get(id) ?? 0;
+        const p = prev.get(id) ?? 0;
+        const cat = catMap.get(id);
+        return {
+          id,
+          name: cat?.name ?? "Uncategorized",
+          icon: cat?.icon ?? "＊",
+          cur: c,
+          prev: p,
+          delta: c - p,
+        };
+      })
+      .filter((m) => m.delta !== 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 5);
+    return {
+      prevMonth,
+      partial,
+      dayCap: Number(dayCap),
+      curTotal,
+      prevTotal,
+      delta: curTotal - prevTotal,
+      movers,
+    };
+  }, [range, txs, categories, curMonth, todayMonth]);
 
   const monthKeys = useMemo(() => {
     const keys: string[] = [];
@@ -449,78 +463,56 @@ export default function Analytics({ currency }: { currency: string }) {
     };
   }, [rangeExpenses, txs, startMonth, range]);
 
-  // Caches the full decluttered label layout across the several calls
-  // Recharts makes to `renderPieLabel` (once per slice) within one render
-  // pass, so the collision-avoidance math in computePieLabelLayout only has
-  // to run once per pie, using the pixel geometry (cx/cy/outerRadius) that's
-  // identical for every slice.
-  const pieLayoutCacheRef = useRef<{ sig: string; layout: PieLabelEntry[] } | null>(
-    null,
-  );
+  const [activePie, setActivePie] = useState<number | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
 
-  // Renders each pie slice's name + amount as a persistent label outside the
-  // chart, connected back to its slice by a leader line colored to match —
-  // the point being nobody should have to hover/tap a slice just to find out
-  // what it is, which barely works on a touch device anyway (no hover state).
-  function renderPieLabel(props: PieLabelRenderProps) {
-    const { cx, cy, outerRadius, name, value, percent } = props;
-    if (!percent || percent < 0.01) return null;
-    const numCx = Number(cx);
-    const numCy = Number(cy);
-    const numOuterRadius = Number(outerRadius);
-    const sig = `${numCx.toFixed(1)}|${numCy.toFixed(1)}|${numOuterRadius.toFixed(1)}|${pieData.length}`;
-    if (!pieLayoutCacheRef.current || pieLayoutCacheRef.current.sig !== sig) {
-      pieLayoutCacheRef.current = {
-        sig,
-        layout: computePieLabelLayout(numCx, numCy, numOuterRadius, pieData),
-      };
-    }
-    const entry = pieLayoutCacheRef.current.layout.find(
-      (e) => e.name === name && Math.abs(e.value - Number(value)) < 0.005,
-    );
-    if (!entry) return null;
-
-    // Cards on this app's mobile-width layout have far less horizontal room
-    // than a desktop chart does — an untruncated long category name (e.g.
-    // "Repay Credit Card") could run the label off the edge of the card.
-    // The full name is always still available from the Tooltip on tap.
-    const label =
-      entry.name.length > 15 ? `${entry.name.slice(0, 14)}…` : entry.name;
-    const textOffset = entry.textAnchor === "start" ? 7 : -7;
-
-    return (
-      <g key={entry.name}>
-        <path
-          d={`M${entry.sx},${entry.sy}L${entry.mx},${entry.my}L${entry.ex},${entry.ey}`}
-          stroke={entry.color}
-          strokeWidth={1.5}
-          fill="none"
-        />
-        <circle cx={entry.ex} cy={entry.ey} r={2} fill={entry.color} stroke="none" />
-        <text
-          x={entry.ex + textOffset}
-          y={entry.ey - 6}
-          textAnchor={entry.textAnchor}
-          fontFamily="var(--sans)"
-          fontSize={11.5}
-          fontWeight={600}
-          fill="var(--ink)"
-        >
-          {label}
-        </text>
-        <text
-          x={entry.ex + textOffset}
-          y={entry.ey + 8}
-          textAnchor={entry.textAnchor}
-          fontFamily="var(--mono)"
-          fontSize={10}
-          fill="var(--ink-faint)"
-        >
-          {fmtMoney(entry.value, currency)}
-        </text>
-      </g>
-    );
-  }
+  const pieSlices = useMemo(() => {
+    const total = pieData.reduce((s, d) => s + d.value, 0) || 1;
+    return pieData.map((d, i) => ({
+      ...d,
+      color: pieColor(i),
+      pct: (d.value / total) * 100,
+    }));
+  }, [pieData]);
+  const pieArcs = useMemo(() => {
+    const n = pieSlices.length;
+    // Give every slice at least PIE_MIN_SWEEP degrees, taking the difference
+    // proportionally from the larger ones so the ring still adds up to 360.
+    const floor = Math.min(PIE_MIN_SWEEP, 360 / n / 2);
+    const raw = pieSlices.map((d) => (d.pct / 100) * 360);
+    const small = raw.filter((v) => v < floor);
+    const bigTotal = raw.reduce((a, v) => (v < floor ? a : a + v), 0);
+    const scale = bigTotal > 0 ? (360 - small.length * floor) / bigTotal : 1;
+    const sweeps = raw.map((v) => (v < floor ? floor : v * scale));
+    let cursor = 0;
+    return pieSlices.map((_, i) => {
+      const grow = activePie === i ? DONUT_GROW : 0;
+      const shape = n === 1 ? null : sectorPath(cursor, sweeps[i], grow);
+      cursor += sweeps[i];
+      return { full: n === 1, path: shape?.d ?? "", cr: shape?.cr ?? 0 };
+    });
+  }, [pieSlices, activePie]);
+  const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
+  // Tapping anywhere outside a slice or legend row clears the selection.
+  useEffect(() => {
+    if (activePie === null) return;
+    const clear = (e: Event) => {
+      const t = e.target as Element | null;
+      if (t && t.closest && t.closest(".pie-arc, .pie-row")) return;
+      setActivePie(null);
+    };
+    document.addEventListener("click", clear);
+    return () => document.removeEventListener("click", clear);
+  }, [activePie]);
+  // A slice picked on the ring that the collapsed legend hides opens it, so
+  // the selected row is never out of sight.
+  const legendExpanded =
+    legendOpen || (activePie !== null && activePie >= LEGEND_PREVIEW);
+  const legendRows = legendExpanded
+    ? pieSlices
+    : pieSlices.slice(0, LEGEND_PREVIEW);
+  const focused =
+    activePie !== null && activePie < pieSlices.length ? pieSlices[activePie] : null;
 
   return (
     <>
@@ -644,41 +636,159 @@ export default function Analytics({ currency }: { currency: string }) {
           ) : (
             <>
               <div className="pie-chart-wrap">
-                <ResponsiveContainer width="100%" height={PIE_CHART_HEIGHT}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={0}
-                      outerRadius={62}
-                      startAngle={90}
-                      endAngle={-270}
-                      label={renderPieLabel}
-                      labelLine={false}
-                      isAnimationActive={false}
-                    >
-                      {pieData.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={entry.color}
-                          stroke="var(--void-elev)"
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v) => fmtMoney(Number(v), currency)}
-                      contentStyle={tooltipStyle}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <svg
+                  viewBox={`0 0 ${DONUT_SIZE} ${DONUT_SIZE}`}
+                  className="pie-svg"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx={DONUT_SIZE / 2}
+                    cy={DONUT_SIZE / 2}
+                    r={DONUT_R}
+                    fill="none"
+                    stroke="var(--surface)"
+                    strokeWidth={DONUT_THICK}
+                  />
+                  {pieSlices.map((d, i) => {
+                    const common = {
+                      className: "pie-arc",
+                      style: {
+                        opacity: activePie === null || activePie === i ? 1 : 0.28,
+                      },
+                      onClick: () => setActivePie((cur) => (cur === i ? null : i)),
+                    };
+                    return pieArcs[i].full ? (
+                      <circle
+                        key={i}
+                        cx={DONUT_SIZE / 2}
+                        cy={DONUT_SIZE / 2}
+                        r={DONUT_R}
+                        fill="none"
+                        stroke={d.color}
+                        strokeWidth={DONUT_THICK + (activePie === i ? DONUT_GROW * 2 : 0)}
+                        {...common}
+                      />
+                    ) : (
+                      <path
+                        key={i}
+                        d={pieArcs[i].path}
+                        fill={d.color}
+                        stroke={d.color}
+                        strokeWidth={pieArcs[i].cr * 2}
+                        strokeLinejoin="round"
+                        {...common}
+                      />
+                    );
+                  })}
+                </svg>
+                <div className="pie-center" aria-live="polite">
+                  <div className="pie-center-label">
+                    {focused ? focused.name : "Total spent"}
+                  </div>
+                  <div
+                    className="pie-center-value"
+                    style={{
+                      fontSize:
+                        fmtMoney(focused ? focused.value : pieTotal, currency).length > 9
+                          ? 17
+                          : fmtMoney(focused ? focused.value : pieTotal, currency).length > 7
+                            ? 21
+                            : 25,
+                    }}
+                  >
+                    {fmtMoney(focused ? focused.value : pieTotal, currency)}
+                  </div>
+                  <div className="pie-center-sub">
+                    {focused
+                      ? `${focused.pct.toFixed(focused.pct < 10 ? 1 : 0)}% of spend`
+                      : `${pieData.length} ${pieData.length === 1 ? "category" : "categories"}`}
+                  </div>
+                </div>
               </div>
+
+              <ul className="pie-legend">
+                {legendRows.map((d, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      className={
+                        "pie-row" +
+                        (activePie === i ? " active" : "") +
+                        (activePie !== null && activePie !== i ? " dim" : "")
+                      }
+                      aria-pressed={activePie === i}
+                      onClick={() => setActivePie((cur) => (cur === i ? null : i))}
+                    >
+                      <span className="pie-dot" style={{ background: d.color }} />
+                      <span className="pie-name">{d.name}</span>
+                      <span className="pie-pct">
+                        {d.pct < 1 ? "<1" : d.pct.toFixed(d.pct < 10 ? 1 : 0)}%
+                      </span>
+                      <span className="pie-amt">{fmtMoney(d.value, currency)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {pieSlices.length > LEGEND_PREVIEW && (
+                <button
+                  type="button"
+                  className="pie-more"
+                  onClick={() => {
+                    setLegendOpen((o) => !o);
+                    if (legendExpanded) setActivePie(null);
+                  }}
+                >
+                  {legendExpanded
+                    ? "Show fewer"
+                    : `Show all ${pieSlices.length}`}
+                </button>
+              )}
             </>
           )}
         </div>
+
+        {range === "month" && vsPrev && (
+          <div className="card">
+            <h2>
+              Vs. {monthLabel(vsPrev.prevMonth)}
+              <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
+                {vsPrev.partial ? `day 1–${vsPrev.dayCap}` : "full month"}
+              </span>
+            </h2>
+            <div className="vs-total">
+              <b>{fmtMoney(vsPrev.curTotal, currency)}</b>
+              <span className="muted">vs {fmtMoney(vsPrev.prevTotal, currency)}</span>
+              <span className={"vs-delta " + (vsPrev.delta > 0 ? "up" : vsPrev.delta < 0 ? "down" : "")}>
+                {vsPrev.delta === 0
+                  ? "no change"
+                  : `${vsPrev.delta > 0 ? "▲" : "▼"} ${fmtMoney(Math.abs(vsPrev.delta), currency)}${
+                      vsPrev.prevTotal > 0
+                        ? ` (${Math.abs((vsPrev.delta / vsPrev.prevTotal) * 100).toFixed(0)}%)`
+                        : ""
+                    }`}
+              </span>
+            </div>
+            {vsPrev.movers.map((m) => (
+              <div className="vs-row" key={m.id}>
+                <span className="vs-name">
+                  <span className="icon">{m.icon}</span>
+                  {m.name}
+                </span>
+                <span className="vs-amt">{fmtMoney(m.cur, currency)}</span>
+                <span className={"vs-delta " + (m.delta > 0 ? "up" : "down")}>
+                  {m.prev === 0
+                    ? "new"
+                    : `${m.delta > 0 ? "▲" : "▼"} ${fmtMoney(Math.abs(m.delta), currency)}`}
+                </span>
+              </div>
+            ))}
+            {vsPrev.partial && (
+              <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                Compared with the same stretch of {monthLabel(vsPrev.prevMonth)}, so a month in progress isn't judged against a finished one.
+              </div>
+            )}
+          </div>
+        )}
 
         {range !== "month" && (
           <div className="card">
@@ -826,79 +936,6 @@ export default function Analytics({ currency }: { currency: string }) {
             ))}
           </div>
         )}
-
-        <div className="card">
-          <h2>
-            Budget vs actual{" "}
-            <span
-              className="muted"
-              style={{ fontFamily: "var(--mono)", fontSize: 11 }}
-            >
-              {monthLabel(curMonth)}
-            </span>
-          </h2>
-          {categories.filter((c) => spendBracketIds.has(c.bracketId)).length === 0 ? (
-            <div className="empty">
-              <div className="glyph">
-                <BarChart3 size={30} strokeWidth={1.5} />
-              </div>
-              Add categories to compare.
-            </div>
-          ) : (
-            <ResponsiveContainer
-              width="100%"
-              height={Math.max(
-                160,
-                categories.filter((c) => spendBracketIds.has(c.bracketId)).length * 44,
-              )}
-            >
-              <BarChart
-                data={categories
-                  .filter((c) => spendBracketIds.has(c.bracketId))
-                  .map((c) => ({
-                    name: c.name.length > 8 ? c.name.slice(0, 7) + "…" : c.name,
-                    budget: c.budget,
-                    actual: monthTx
-                      .filter((t) => t.categoryId === c.id)
-                      .reduce((s, t) => s + t.amount, 0),
-                  }))}
-                layout="vertical"
-                margin={{ left: 10 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--surface-border)"
-                  horizontal={false}
-                />
-                <XAxis type="number" stroke="var(--ink-soft)" fontSize={11} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  stroke="var(--ink-soft)"
-                  fontSize={11}
-                  width={64}
-                />
-                <Tooltip
-                  formatter={(v) => fmtMoney(Number(v), currency)}
-                  contentStyle={tooltipStyle}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar
-                  dataKey="budget"
-                  fill="var(--ink-faint)"
-                  radius={[0, 4, 4, 0]}
-                  name="Budget"
-                />
-                <Bar
-                  dataKey="actual"
-                  fill="var(--gold)"
-                  radius={[0, 4, 4, 0]}
-                  name="Actual"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
       </div>
     </>
   );

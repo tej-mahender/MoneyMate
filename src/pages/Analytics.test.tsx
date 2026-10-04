@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import Analytics from './Analytics';
 import { db } from '../db/db';
 import { fmtMoney, monthKey, todayISO } from '../lib/format';
@@ -138,5 +138,152 @@ describe('Analytics — "Month" range can step back to browse a closed past mont
     await user.click(screen.getByText('This month'));
 
     expect(screen.getByRole('button', { name: 'Next month' })).toBeDisabled();
+  });
+});
+
+
+describe('Analytics — "Where it went" donut selection', () => {
+  it('selects a slice, switches to another, and clears via the same slice, a tap anywhere else, or a legend row; slice colours are unique', async () => {
+    const bracketId = await makeBracket('spend');
+    const date = `${monthKey(todayISO())}-10`;
+    for (const [name, amount] of [['Rent', 14000], ['Food', 3000], ['Tea', 500]] as const) {
+      const id = await db.categories.add({ name, icon: '💳', color: '#F0B94D', budget: 1, bracketId });
+      await db.transactions.add({ type: 'expense', amount, categoryId: id, date, createdAt: Date.now() });
+    }
+    const { container } = renderAnalytics();
+    await screen.findAllByText('Rent');
+    const arcs = () => container.querySelectorAll('.pie-arc');
+    const center = () => container.querySelector('.pie-center')!.textContent;
+
+    expect(arcs().length).toBe(3);
+    fireEvent.click(arcs()[1]);
+    expect(center()).toContain('Food');
+    fireEvent.click(arcs()[1]);
+    expect(center()).toContain('Total spent');
+    fireEvent.click(arcs()[0]);
+    fireEvent.click(arcs()[2]);
+    expect(center()).toContain('Tea');
+    fireEvent.click(document.body);
+    expect(center()).toContain('Total spent');
+    fireEvent.click(container.querySelectorAll('.pie-row')[1]);
+    expect(center()).toContain('Food');
+
+    // All three categories share one stored colour, yet every slice differs.
+    const dots = Array.from(container.querySelectorAll('.pie-dot')).map((e) => (e as HTMLElement).style.background);
+    expect(new Set(dots).size).toBe(3);
+  });
+});
+
+describe('Analytics — donut keeps every category separate', () => {
+  it('shows each category as its own slice and legend row with a unique colour (no "Other" bucket)', async () => {
+    const bracketId = await makeBracket('spend');
+    const date = `${monthKey(todayISO())}-10`;
+    const names = ['Rent', 'Food', 'Tea', 'Fuel', 'Gym', 'Movies', 'Books', 'Gifts', 'Phone', 'Water'];
+    for (const [i, name] of names.entries()) {
+      const id = await db.categories.add({ name, icon: '💳', color: '#F0B94D', budget: 1, bracketId });
+      await db.transactions.add({ type: 'expense', amount: 10000 / (i + 1), categoryId: id, date, createdAt: Date.now() });
+    }
+    const { container } = renderAnalytics();
+    await screen.findAllByText('Rent');
+    expect(container.querySelectorAll('.pie-arc').length).toBe(10);
+    // The legend opens on the top 5 and expands on request — nothing is lost.
+    expect(container.querySelectorAll('.pie-row').length).toBe(5);
+    fireEvent.click(screen.getByText('Show all 10'));
+    expect(container.querySelectorAll('.pie-row').length).toBe(10);
+    fireEvent.click(screen.getByText('Show fewer'));
+    expect(container.querySelectorAll('.pie-row').length).toBe(5);
+    fireEvent.click(screen.getByText('Show all 10'));
+    expect(screen.queryByText(/^Other \(/)).not.toBeInTheDocument();
+    const dots = Array.from(container.querySelectorAll('.pie-dot')).map((e) => (e as HTMLElement).style.background);
+    expect(new Set(dots).size).toBe(10);
+  });
+});
+
+describe('Analytics — donut legend preview', () => {
+  async function seed(n: number) {
+    const bracketId = await makeBracket('spend');
+    const date = `${monthKey(todayISO())}-10`;
+    for (let i = 0; i < n; i++) {
+      const id = await db.categories.add({ name: `Cat${i}`, icon: '💳', color: '#F0B94D', budget: 1, bracketId });
+      await db.transactions.add({ type: 'expense', amount: 10000 - i * 100, categoryId: id, date, createdAt: Date.now() });
+    }
+  }
+
+  it('has no toggle when there are 5 or fewer categories', async () => {
+    await seed(5);
+    const { container } = renderAnalytics();
+    await screen.findAllByText('Cat0');
+    expect(container.querySelectorAll('.pie-row').length).toBe(5);
+    expect(screen.queryByText(/Show all/)).not.toBeInTheDocument();
+  });
+
+  it('selecting a slice the collapsed legend hides expands the legend so the selection stays visible', async () => {
+    await seed(8);
+    const { container } = renderAnalytics();
+    await screen.findAllByText('Cat0');
+    expect(container.querySelectorAll('.pie-row').length).toBe(5);
+    fireEvent.click(container.querySelectorAll('.pie-arc')[7]);
+    expect(container.querySelectorAll('.pie-row').length).toBe(8);
+    expect(container.querySelector('.pie-row.active')).not.toBeNull();
+  });
+});
+
+describe('Analytics — vs. last month', () => {
+  afterEach(() => vi.useRealTimers());
+
+  async function seedMonths() {
+    const bracketId = await makeBracket('spend');
+    const food = await db.categories.add({ name: 'Food', icon: '🍲', color: '#6FC98A', budget: 1, bracketId });
+    const rent = await db.categories.add({ name: 'Rent', icon: '🏠', color: '#F0B94D', budget: 1, bracketId });
+    const add = (categoryId: number, amount: number, date: string) =>
+      db.transactions.add({ type: 'expense', amount, categoryId, date, createdAt: 0 });
+    await add(food, 1000, '2026-09-05');
+    await add(food, 500, '2026-09-25'); // after "today" in the month-in-progress case
+    await add(rent, 14000, '2026-09-01');
+    await add(food, 2500, '2026-10-03');
+    await add(rent, 14000, '2026-10-01');
+    await add(food, 800, '2026-08-10'); // for the closed-month case
+    await add(rent, 14000, '2026-08-01');
+  }
+
+  it('compares a month in progress with the same stretch of last month, and lists only the categories that moved', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 12));
+    await seedMonths();
+    renderAnalytics();
+
+    const card = (await screen.findByText(/^Vs\. September 2026/)).closest('.card') as HTMLElement;
+    expect(within(card).getByText('day 1–15')).toBeInTheDocument();
+    // This month 16,500 vs 15,000 for Sept 1–15 (the 25th is excluded).
+    expect(within(card).getByText(fmtMoney(16500, '₹'))).toBeInTheDocument();
+    expect(within(card).getByText(`vs ${fmtMoney(15000, '₹')}`)).toBeInTheDocument();
+    expect(within(card).getByText(`▲ ${fmtMoney(1500, '₹')} (10%)`)).toBeInTheDocument();
+    expect(within(card).getByText('Food')).toBeInTheDocument();
+    expect(within(card).queryByText('Rent')).not.toBeInTheDocument(); // unchanged
+  });
+
+  it('compares a closed month with the whole of the month before it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 12));
+    await seedMonths();
+    renderAnalytics();
+    await screen.findByText(/^Vs\. September 2026/);
+    fireEvent.click(screen.getByLabelText('Previous month'));
+
+    const card = (await screen.findByText(/^Vs\. August 2026/)).closest('.card') as HTMLElement;
+    expect(within(card).getByText('full month')).toBeInTheDocument();
+    expect(within(card).getByText(fmtMoney(15500, '₹'))).toBeInTheDocument(); // Sept in full
+    expect(within(card).getByText(`vs ${fmtMoney(14800, '₹')}`)).toBeInTheDocument();
+  });
+
+  it('is hidden when last month has nothing to compare against', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 12));
+    const bracketId = await makeBracket('spend');
+    const food = await db.categories.add({ name: 'Food', icon: '🍲', color: '#6FC98A', budget: 1, bracketId });
+    await db.transactions.add({ type: 'expense', amount: 700, categoryId: food, date: '2026-10-03', createdAt: 0 });
+    renderAnalytics();
+    await screen.findAllByText('Food');
+    expect(screen.queryByText(/^Vs\./)).not.toBeInTheDocument();
   });
 });

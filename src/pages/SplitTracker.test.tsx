@@ -70,7 +70,7 @@ describe("SplitTracker — person balances", () => {
 
     expect(await screen.findByText("Rahul")).toBeInTheDocument();
     expect((await screen.findAllByText("₹1,000")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("1 expense")).toBeInTheDocument();
+    expect(await screen.findByText(/^1 expense\b/)).toBeInTheDocument();
   });
 
   it("sums multiple expenses for the same person into one running balance", async () => {
@@ -79,7 +79,7 @@ describe("SplitTracker — person balances", () => {
     renderTracker();
 
     expect((await screen.findAllByText("₹1,500")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("2 expenses")).toBeInTheDocument();
+    expect(await screen.findByText(/^2 expenses\b/)).toBeInTheDocument();
   });
 
   it('a fully-settled person moves to the "Settled up" section, not the main outstanding list', async () => {
@@ -111,7 +111,7 @@ describe("SplitTracker — settling a debt never touches transactions or categor
     renderTracker();
 
     await user.click(await screen.findByText("Rahul"));
-    await user.click(await screen.findByText(/Mark ₹1,000 paid/));
+    await user.click(await screen.findByText(/Mark full ₹1,000 paid/));
 
     const shares = await db.splitShares.toArray();
     expect(shares[0].amountSettled).toBe(1000);
@@ -126,7 +126,7 @@ describe("SplitTracker — settling a debt never touches transactions or categor
     renderTracker();
 
     await user.click(await screen.findByText("Rahul"));
-    const partialInput = await screen.findByPlaceholderText("Partial");
+    const partialInput = await screen.findByPlaceholderText("Partial amount");
     await user.type(partialInput, "900");
     await user.click(screen.getByText("Record"));
 

@@ -30,16 +30,17 @@ The product implements a *pay-yourself-first* budgeting model. Users allocate sp
 - Category and subcategory budgets organized into brackets
 - Pay-yourself-first allocation model with per-category tracking
 - Automatic reduction of catch-all "General" categories when subcategories are added, keeping bracket totals stable
+- **Month review:** step the Budget screen back to any closed month for a read-only report — budgeted vs spent, over/under per category, savings targets, income — measured against the caps that applied *at the time*, not today's. A gentle prompt on the first days of a new month points to last month's review.
 
 **Transaction Management**
 - Fast transaction entry with recurring transaction support
-- Month-scoped history with filtering and a month snapshot summary (total spent, income, category breakdown)
+- Month-scoped history with search, category and day filters and a calendar heatmap — a pure ledger, with a one-tap link to that month's budget review
 - Split-expense tracking: only the user's own share is charged to the category budget; other participants' shares are tracked separately with per-person balances and full or partial settlement
 
 **Analytics**
-- Category distribution and trend visualizations
-- Month-by-month navigation across historical periods
-- Collision-aware pie chart label layout for readability on small displays
+- Donut chart of where the money went: every category its own colour, tap a slice (or a legend row) to read its amount and share, tap anywhere else to clear
+- "Vs. last month" movers — the categories that changed most, compared like-for-like with the same stretch of last month while a month is still in progress
+- Trend, income-vs-spend, weekday and merchant views, with month-by-month navigation across historical periods
 
 **Android Integration**
 - Home-screen widgets in compact and large (4×2) variants
@@ -56,11 +57,11 @@ The product implements a *pay-yourself-first* budgeting model. Users allocate sp
 | Screen | Purpose |
 | --- | --- |
 | **Home** | Landing screen. Income, and one card per bracket (Expenditure, Savings, Investments, Income, or any custom one) with this month's progress. "Unallocated" — money you haven't given a job to yet — is front and center. |
-| **Budget** | Daily-use shortcut: capped spending only, aggregated across every spend-kind bracket. Ring, by-category breakdown, today/daily-average/days-left, recent transactions. |
+| **Budget** | Daily-use shortcut: capped spending only, aggregated across every spend-kind bracket. Ring, by-category breakdown, today/daily-average/days-left, recent transactions. Step back through earlier months for a read-only review against that month's caps. |
 | **Bracket detail** | One reusable page for any bracket's own categories — Rent/Food under Expenditure, Portfolio/Gold under Investments, Salary/Freelance under Income. Add, edit, archive, or delete categories; rename or archive the bracket itself. |
 | **Add transaction** | Log an expense or income entry: amount, category, date, and optional merchant/note. |
-| **History** | Full transaction list with search, month filter, category filter, and a calendar-heatmap view. |
-| **Insights** | Charts: spend trends, category breakdown, income vs. spend, day-of-week patterns, top merchants, budget vs. actual. |
+| **History** | The transaction ledger: search, month filter, category filter, calendar-heatmap view, edit and delete. Analysis lives elsewhere; a link jumps to that month's budget review. |
+| **Insights** | Patterns over time: category breakdown, vs-last-month movers, spend trends, income vs. spend, day-of-week patterns, top merchants. |
 | **Settings** | Manage brackets, recurring transactions, currency/theme/income preferences, backup & restore, and data exports. |
 
 ## Data Model
@@ -129,7 +130,7 @@ All fonts are bundled with the application; no runtime requests are made to exte
 
 ## Data Model and Persistence
 
-Data is stored in a Dexie-managed IndexedDB database (current schema: **version 6**). Core entities include categories and brackets, transactions, recurring transaction definitions, and `splitShares` for amounts owed by other participants.
+Data is stored in a Dexie-managed IndexedDB database (current database version: **6**; backup format: **7**). Core entities include categories and brackets, transactions, recurring transaction definitions, `splitShares` for amounts owed by other participants, and `budgetHistory` — a per-category timeline of budget caps so closed months are reported against the cap that applied then.
 
 Field-level definitions, relationships, and derived-column semantics are documented in [`DATA_SCHEMA.md`](./DATA_SCHEMA.md).
 
@@ -141,7 +142,8 @@ Backups are complete, portable snapshots of all tables. Restore performs identif
 
 - Only the user's own share of a split expense counts against a category budget.
 - Recurring transaction processing validates frequency values before execution.
-- Budget figures shown on any screen originate from `computeMonthSummary()`.
+- Budget figures for any month, on any screen, originate from one pure function (`buildMonthReport`, loaded through `computeMonthReport()`); `computeMonthSummary()` is a thin wrapper over it.
+- Editing or archiving a budget never rewrites a closed month: every change is recorded in `budgetHistory` for the month it was made in.
 
 ## Security and Privacy
 

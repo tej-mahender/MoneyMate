@@ -11,6 +11,7 @@ import {
   type Recurring,
   type Settings,
   type SplitShare,
+  type BudgetHistoryEntry,
 } from "../db/db";
 import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from "./format";
 
@@ -18,7 +19,12 @@ import { monthKey, weekdayName, isWeekend, quarterOf, isoWeek } from "./format";
 // SplitShare interface. Purely additive: older backups (schemaVersion <= 5)
 // simply have no `splitShares` array at all, which importFullBackup()
 // treats as "nothing to restore for this feature", not an error.
-export const SCHEMA_VERSION = 6;
+// v7: adds budgetHistory (per-category budget timeline for closed-month
+// reports) — see db.ts's BudgetHistoryEntry. Also purely additive: a v6
+// backup has no `budgetHistory`, and the app re-seeds it from the restored
+// categories' current budgets on next launch (earlier months then count as
+// approximate, same as for an in-place upgrade).
+export const SCHEMA_VERSION = 7;
 
 /** Prevents CSV formula injection: a cell starting with =, +, -, or @ gets
  *  interpreted as a formula by Excel/Sheets when the file is opened. Prefixing
@@ -29,15 +35,23 @@ function sanitizeCsvCell(v: string): string {
 }
 
 async function loadAll() {
-  const [transactions, categories, brackets, recurring, settings, splitShares] =
-    await Promise.all([
-      db.transactions.toArray(),
-      db.categories.toArray(),
-      db.brackets.toArray(),
-      db.recurring.toArray(),
-      db.settings.toArray(),
-      db.splitShares.toArray(),
-    ]);
+  const [
+    transactions,
+    categories,
+    brackets,
+    recurring,
+    settings,
+    splitShares,
+    budgetHistory,
+  ] = await Promise.all([
+    db.transactions.toArray(),
+    db.categories.toArray(),
+    db.brackets.toArray(),
+    db.recurring.toArray(),
+    db.settings.toArray(),
+    db.splitShares.toArray(),
+    db.budgetHistory.toArray(),
+  ]);
   return {
     transactions,
     categories,
@@ -45,6 +59,7 @@ async function loadAll() {
     recurring,
     settings,
     splitShares,
+    budgetHistory,
   };
 }
 
@@ -225,6 +240,7 @@ export async function exportFullBackup(): Promise<string> {
     recurring,
     settings,
     splitShares,
+    budgetHistory,
   } = await loadAll();
   return JSON.stringify(
     {
@@ -235,6 +251,7 @@ export async function exportFullBackup(): Promise<string> {
       recurring,
       settings,
       splitShares,
+      budgetHistory,
       exportedAt: new Date().toISOString(),
     },
     null,
@@ -270,6 +287,7 @@ export async function importFullBackup(json: string) {
     recurring?: unknown[];
     settings?: unknown;
     splitShares?: unknown[];
+    budgetHistory?: unknown[];
   };
 
   // A backup written by a newer app version might use a data shape this
@@ -294,6 +312,10 @@ export async function importFullBackup(json: string) {
     ? data.splitShares
     : [];
 
+  const budgetHistoryRaw: unknown[] = Array.isArray(data.budgetHistory)
+    ? data.budgetHistory
+    : [];
+
   // Generous sanity cap — not a real-world size any real backup would hit,
   // just a guard against a corrupted/hostile file freezing the tab on import.
   const MAX_RECORDS = 200_000;
@@ -302,7 +324,8 @@ export async function importFullBackup(json: string) {
     data.transactions.length > MAX_RECORDS ||
     bracketsRaw.length > MAX_RECORDS ||
     recurringRaw.length > MAX_RECORDS ||
-    splitSharesRaw.length > MAX_RECORDS
+    splitSharesRaw.length > MAX_RECORDS ||
+    budgetHistoryRaw.length > MAX_RECORDS
   ) {
     throw new Error("Backup file is too large to import.");
   }
@@ -347,6 +370,7 @@ export async function importFullBackup(json: string) {
       db.recurring,
       db.settings,
       db.splitShares,
+      db.budgetHistory,
     ],
     async () => {
       await db.brackets.clear();
@@ -355,6 +379,7 @@ export async function importFullBackup(json: string) {
       await db.recurring.clear();
       await db.settings.clear();
       await db.splitShares.clear();
+      await db.budgetHistory.clear();
 
       const bracketIdMap = new Map<number, number>();
       let legacyIds: LegacyBracketIds | null = null;
@@ -423,6 +448,11 @@ export async function importFullBackup(json: string) {
         });
       }
 
+      // Budget timeline rows follow their categories onto the freshly
+      // assigned ids; a row whose category didn't survive is dropped.
+      const history = sanitizeBudgetHistory(budgetHistoryRaw, categoryIdMap);
+      if (history.length) await db.budgetHistory.bulkAdd(history);
+
       const recurringIdMap = new Map<number, number>();
       if (recurring.length) {
         const newIds = await db.recurring.bulkAdd(
@@ -486,6 +516,33 @@ export async function importFullBackup(json: string) {
 // Old category/recurring ids referenced by transactions are explicitly
 // remapped onto the freshly-assigned ids in importFullBackup() above, rather
 // than assumed to line up positionally — see the comment there.
+
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function sanitizeBudgetHistory(
+  raw: unknown[],
+  categoryIdMap: Map<number, number>,
+): BudgetHistoryEntry[] {
+  const out: BudgetHistoryEntry[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const r = entry as Record<string, unknown>;
+    const newCatId =
+      typeof r.categoryId === "number" ? categoryIdMap.get(r.categoryId) : undefined;
+    if (newCatId === undefined) continue;
+    if (typeof r.month !== "string" || !MONTH_RE.test(r.month)) continue;
+    const origin =
+      r.origin === "created" || r.origin === "edited" ? r.origin : "migrated";
+    out.push({
+      categoryId: newCatId,
+      month: r.month,
+      budget: Math.max(0, asFiniteNumber(r.budget, 0)),
+      origin,
+      createdAt: asFiniteNumber(r.createdAt, Date.now()),
+    });
+  }
+  return out;
+}
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

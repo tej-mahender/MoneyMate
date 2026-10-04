@@ -19,6 +19,7 @@ import BottomNav from "./components/BottomNav";
 import Toast from "./components/Toast";
 import ConfirmDialog from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
+import BudgetHistoryKeeper from "./components/BudgetHistoryKeeper";
 
 // Code-split everything except Overview (Home), which is the landing screen
 // on every normal launch and should paint immediately with no extra network
@@ -198,6 +199,7 @@ export default function App() {
         <AnimatedRoutes settings={settings} onSettingsChange={setSettings} />
         <BottomNav />
         <Toast />
+        <BudgetHistoryKeeper />
         <ConfirmDialog />
       </div>
     </HashRouter>

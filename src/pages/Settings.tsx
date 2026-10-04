@@ -286,12 +286,18 @@ export default function Settings({
       return;
     await db.transaction(
       "rw",
-      db.brackets,
-      db.categories,
-      db.transactions,
-      db.recurring,
-      db.settings,
+      [
+        db.brackets,
+        db.categories,
+        db.transactions,
+        db.recurring,
+        db.settings,
+        db.splitShares,
+        db.budgetHistory,
+      ],
       async () => {
+        await db.splitShares.clear();
+        await db.budgetHistory.clear();
         await db.brackets.clear();
         await db.categories.clear();
         await db.transactions.clear();

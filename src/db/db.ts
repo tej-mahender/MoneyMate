@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import { monthKey, todayISO } from "../lib/format";
+import { buildMonthReport, type MonthReport } from "../lib/monthReport";
 
 export type TxType = "expense" | "income";
 export type Frequency = "daily" | "weekly" | "monthly" | "yearly";
@@ -106,6 +107,28 @@ export interface SplitShare {
   createdAt: number;
 }
 
+/** One point on a category's budget timeline. A closed month's report must
+ *  show the cap that applied *then*, not whatever the budget is today, so
+ *  every change to a category's effective budget (edit, archive, restore)
+ *  is recorded here, keyed by the month it was made in.
+ *  - A month's budget is the latest row with `month` <= that month.
+ *  - `budget` is the *effective* cap: 0 while the category is archived.
+ *  - `origin` tells the report how to treat months before the first row:
+ *    'migrated' rows describe a category that already existed when tracking
+ *    began (earlier months reuse its budget and are flagged approximate);
+ *    'created' rows mean the category did not exist before `month`, so
+ *    earlier months must not count its budget at all.
+ *  Maintained by syncBudgetHistory(); never edited by hand. */
+export type BudgetHistoryOrigin = "migrated" | "created" | "edited";
+export interface BudgetHistoryEntry {
+  id?: number;
+  categoryId: number;
+  month: string; // yyyy-mm — first month this budget applies to
+  budget: number;
+  origin: BudgetHistoryOrigin;
+  createdAt: number;
+}
+
 export interface Settings {
   id?: number; // always 1
   onboarded: boolean;
@@ -128,6 +151,7 @@ class MoneyMateDatabase extends Dexie {
   recurring!: Table<Recurring, number>;
   settings!: Table<Settings, number>;
   splitShares!: Table<SplitShare, number>;
+  budgetHistory!: Table<BudgetHistoryEntry, number>;
 
   constructor() {
     super("pfos_db");
@@ -272,6 +296,35 @@ class MoneyMateDatabase extends Dexie {
       settings: "++id",
       splitShares: "++id, transactionId, personName",
     });
+
+    // v6: budgetHistory — per-category budget timeline so a closed month can
+    // be reported against the cap that applied at the time. Existing
+    // categories are seeded with their current effective budget as of this
+    // month ('migrated': earlier months can only be approximated).
+    this.version(6)
+      .stores({
+        brackets: "++id, name, kind, archived",
+        categories: "++id, name, archived, bracketId",
+        transactions: "++id, type, categoryId, date, recurringId",
+        recurring: "++id, categoryId, nextDate, paused",
+        settings: "++id",
+        splitShares: "++id, transactionId, personName",
+        budgetHistory: "++id, categoryId, month",
+      })
+      .upgrade(async (tx) => {
+        const cats = await tx.table("categories").toArray();
+        if (!cats.length) return;
+        const month = monthKey(todayISO());
+        await tx.table("budgetHistory").bulkAdd(
+          cats.map((c: Category) => ({
+            categoryId: c.id as number,
+            month,
+            budget: c.archived ? 0 : c.budget,
+            origin: "migrated" as const,
+            createdAt: Date.now(),
+          })),
+        );
+      });
   }
 }
 
@@ -480,41 +533,101 @@ export async function ensureIncomeCategoriesSeeded() {
   }
 }
 
-/** Current month's spent/budget/remaining against the budget CAP only — the
- *  same figures the Budget screen shows, and in fact the literal source of
- *  them (Dashboard renders this function's output directly rather than
- *  keeping its own copy of the same math). Aggregates every category whose
- *  bracket is kind 'spend' (usually just Expenditure, but not assumed to be
- *  the only one — a custom second spend-kind bracket rolls in too).
- *  Deliberately excludes 'allocation' brackets (Savings, Investments,
- *  EMI…): those are transfers out of income, tracked separately on Home,
- *  not spend against a cap. Uses an indexed date-range query rather than
- *  pulling the whole transactions table into memory, so cost scales with
- *  "days in this month" rather than total history — see
- *  src/test/performance.test.tsx for the regression guard on that. */
-export async function computeMonthSummary() {
-  const curMonth = monthKey(todayISO());
-  const [brackets, categories, transactions] = await Promise.all([
+/** Brings budgetHistory in line with the categories' current effective
+ *  budgets. Called whenever categories change (see BudgetHistoryKeeper in
+ *  App.tsx) rather than from every write site, so no code path that edits a
+ *  budget — BracketDetail, Onboarding, backup restore, catch-all shrinking —
+ *  can forget to record it. Idempotent; `month` is injectable for tests.
+ *  A change made twice in one month keeps only the month's final value. */
+export async function syncBudgetHistory(
+  month: string = monthKey(todayISO()),
+): Promise<void> {
+  await db.transaction("rw", db.categories, db.brackets, db.budgetHistory, async () => {
+    const [cats, rows, brackets] = await Promise.all([
+      db.categories.toArray(),
+      db.budgetHistory.toArray(),
+      db.brackets.toArray(),
+    ]);
+    const archivedBrackets = new Set(
+      brackets.filter((b) => b.archived).map((b) => b.id),
+    );
+    const liveIds = new Set(cats.map((c) => c.id as number));
+
+    // Rows for deleted categories are orphans — drop them.
+    const orphanIds = rows.filter((r) => !liveIds.has(r.categoryId)).map((r) => r.id!);
+    if (orphanIds.length) await db.budgetHistory.bulkDelete(orphanIds);
+
+    const latest = new Map<number, BudgetHistoryEntry>();
+    for (const r of rows) {
+      if (!liveIds.has(r.categoryId)) continue;
+      const cur = latest.get(r.categoryId);
+      if (!cur || r.month > cur.month || (r.month === cur.month && (r.id ?? 0) > (cur.id ?? 0))) {
+        latest.set(r.categoryId, r);
+      }
+    }
+
+    const tableWasEmpty = rows.length === 0;
+    for (const c of cats) {
+      const id = c.id as number;
+      // A category is effectively uncapped-to-zero once it, or the whole
+      // bracket it lives in, is archived.
+      const effective =
+        c.archived || archivedBrackets.has(c.bracketId) ? 0 : c.budget;
+      const last = latest.get(id);
+      if (!last) {
+        await db.budgetHistory.add({
+          categoryId: id,
+          month,
+          budget: effective,
+          origin: tableWasEmpty ? "migrated" : "created",
+          createdAt: Date.now(),
+        });
+      } else if (last.budget !== effective) {
+        if (last.month === month) {
+          await db.budgetHistory.update(last.id!, { budget: effective });
+        } else {
+          await db.budgetHistory.add({
+            categoryId: id,
+            month,
+            budget: effective,
+            origin: "edited",
+            createdAt: Date.now(),
+          });
+        }
+      }
+    }
+  });
+}
+
+/** Loads everything the month report needs and builds it. This is the single
+ *  entry point screens use for "how did month X go". */
+export async function computeMonthReport(month: string): Promise<MonthReport> {
+  const [brackets, categories, transactions, history] = await Promise.all([
     db.brackets.toArray(),
     db.categories.toArray(),
-    db.transactions.where("date").startsWith(curMonth).toArray(),
+    db.transactions.where("date").startsWith(month).toArray(),
+    db.budgetHistory.toArray(),
   ]);
-  const spendBracketIds = new Set(
-    brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id),
-  );
-  const spendCategoryIds = new Set(
-    categories.filter((c) => spendBracketIds.has(c.bracketId)).map((c) => c.id),
-  );
-  const totalBudget = categories
-    .filter((c) => spendCategoryIds.has(c.id) && !c.archived)
-    .reduce((s, c) => s + c.budget, 0);
-  const totalSpent = transactions
-    .filter((t) => t.type === "expense" && spendCategoryIds.has(t.categoryId))
-    .reduce((s, t) => s + t.amount, 0);
+  return buildMonthReport(month, {
+    brackets,
+    categories,
+    transactions,
+    history,
+    today: todayISO(),
+  });
+}
+
+/** Current month's spent/budget/remaining against the budget CAP only — the
+ *  Budget screen's top line and the home-screen widget. Delegates to the
+ *  month report so every screen shares one definition (see
+ *  lib/monthReport.ts). */
+export async function computeMonthSummary() {
+  const month = monthKey(todayISO());
+  const r = await computeMonthReport(month);
   return {
-    spent: totalSpent,
-    budget: totalBudget,
-    remaining: totalBudget - totalSpent,
-    monthKey: curMonth,
+    spent: r.spent,
+    budget: r.budgeted,
+    remaining: r.remaining,
+    monthKey: month,
   };
 }
