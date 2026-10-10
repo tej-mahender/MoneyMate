@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import { db, type SplitShare } from "../db/db";
@@ -17,9 +18,9 @@ import { ChevronLeft, ChevronRight, HandCoins, Check } from "lucide-react";
  */
 export default function SplitTracker({ currency }: { currency: string }) {
   const navigate = useNavigate();
-  const shares = useLiveQuery(() => db.splitShares.toArray(), []) ?? [];
-  const transactions = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
-  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const shares = useLiveQuery(() => db.splitShares.toArray(), []) ?? EMPTY_LIST;
+  const transactions = useLiveQuery(() => db.transactions.toArray(), []) ?? EMPTY_LIST;
+  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
   const txById = new Map(transactions.map((t) => [t.id, t]));
   const catById = new Map(categories.map((c) => [c.id, c]));
 

@@ -4,6 +4,7 @@ import {
   monthKey,
   fmtMoney,
   roundMoney,
+  localeForCurrency,
   monthLabel,
   shortDate,
   longDate,
@@ -78,6 +79,27 @@ describe("fmtMoney", () => {
   });
   it("formats zero without a sign", () => {
     expect(fmtMoney(0, "$")).toBe("$0");
+  });
+  it("groups digits the way each currency's users expect", () => {
+    expect(fmtMoney(1234567.5, "₹")).toBe("₹12,34,567.5"); // lakh/crore
+    expect(fmtMoney(1234567.5, "$")).toBe("$1,234,567.5");
+    expect(fmtMoney(1234567.5, "£")).toBe("£1,234,567.5");
+    expect(fmtMoney(1234567.5, "€")).toBe("€1,234,567.5");
+  });
+  it("falls back to the original Indian grouping for an unknown currency symbol", () => {
+    expect(fmtMoney(1234567, "R$")).toBe("R$12,34,567");
+  });
+});
+
+describe("localeForCurrency", () => {
+  it.each([
+    ["₹", "en-IN"],
+    ["$", "en-US"],
+    ["£", "en-GB"],
+    ["€", "en-IE"],
+    ["¥", "en-IN"],
+  ])("%s -> %s", (symbol, locale) => {
+    expect(localeForCurrency(symbol)).toBe(locale);
   });
 });
 

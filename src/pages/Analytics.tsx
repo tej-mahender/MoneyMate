@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/db";
 import {
@@ -150,19 +151,26 @@ const SERIES_COLORS = [
 
 export default function Analytics({ currency }: { currency: string }) {
   const [range, setRange] = useState<Range>("month");
-  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
-  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
+  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? EMPTY_LIST;
+  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
+  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? EMPTY_LIST;
   // Money moved into an allocation bracket (Savings/Investments/EMI…) is
   // logged as an ordinary expense-type transaction, but it isn't spend —
   // Dashboard already excludes it from "Spent"; every figure derived from
   // rangeExpenses below (pie chart, trend line, top merchants, insights)
   // needs the same exclusion so a savings transfer doesn't inflate them.
-  const allocationBracketIds = new Set(brackets.filter((b) => b.kind === "allocation").map((b) => b.id));
-  const allocationCategoryIds = new Set(
-    categories.filter((c) => allocationBracketIds.has(c.bracketId)).map((c) => c.id),
+  const allocationCategoryIds = useMemo(() => {
+    const allocationBracketIds = new Set(
+      brackets.filter((b) => b.kind === "allocation").map((b) => b.id),
+    );
+    return new Set(
+      categories.filter((c) => allocationBracketIds.has(c.bracketId)).map((c) => c.id),
+    );
+  }, [brackets, categories]);
+  const catMap = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
   );
-  const catMap = new Map(categories.map((c) => [c.id, c]));
   const todayMonth = monthKey(todayISO());
   // Only meaningful when range === "month" — for every other range (3m,
   // 6m, 1y, all) the window still trails back from today, same as before.
@@ -191,8 +199,12 @@ export default function Analytics({ currency }: { currency: string }) {
       ),
     [txs, startMonth, curMonth],
   );
-  const rangeExpenses = rangeTx.filter(
-    (t) => t.type === "expense" && !allocationCategoryIds.has(t.categoryId),
+  const rangeExpenses = useMemo(
+    () =>
+      rangeTx.filter(
+        (t) => t.type === "expense" && !allocationCategoryIds.has(t.categoryId),
+      ),
+    [rangeTx, allocationCategoryIds],
   );
 
   const pieData = useMemo(() => {
@@ -207,7 +219,7 @@ export default function Analytics({ currency }: { currency: string }) {
         color: catMap.get(id)?.color || "#888",
       }))
       .sort((a, b) => b.value - a.value);
-  }, [rangeExpenses, categories]);
+  }, [rangeExpenses, catMap]);
 
   // Month-over-month movers. For the month still in progress, last month is
   // cut off at the same day so the comparison is like-for-like.
@@ -255,7 +267,7 @@ export default function Analytics({ currency }: { currency: string }) {
       delta: curTotal - prevTotal,
       movers,
     };
-  }, [range, txs, categories, curMonth, todayMonth]);
+  }, [range, txs, catMap, allocationCategoryIds, curMonth, todayMonth]);
 
   const monthKeys = useMemo(() => {
     const keys: string[] = [];
@@ -317,7 +329,7 @@ export default function Analytics({ currency }: { currency: string }) {
         return row;
       }),
     };
-  }, [rangeExpenses, monthKeys, txs, categories]);
+  }, [rangeExpenses, monthKeys, txs, catMap]);
 
   const weekdayData = useMemo(() => {
     const totals = new Map<string, { total: number; count: number }>();
@@ -461,7 +473,7 @@ export default function Analytics({ currency }: { currency: string }) {
       topCatCount,
       momPct,
     };
-  }, [rangeExpenses, txs, startMonth, range]);
+  }, [rangeExpenses, txs, startMonth, range, allocationCategoryIds]);
 
   const [activePie, setActivePie] = useState<number | null>(null);
   const [legendOpen, setLegendOpen] = useState(false);

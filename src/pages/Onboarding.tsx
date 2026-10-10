@@ -111,6 +111,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     Investments: [],
   });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function updateCat(bracketName: string, i: number, field: keyof DraftCat, val: string) {
     setCatsByBracket((prev) => ({
@@ -136,6 +137,20 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
   async function finish() {
     setSaving(true);
+    setSaveError(null);
+    try {
+      await saveSetup();
+    } catch (err) {
+      console.warn("Onboarding save failed", err);
+      setSaveError("Couldn't save your setup. Please try again.");
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    onDone();
+  }
+
+  async function saveSetup() {
     // Seeds all 4 default brackets (Expenditure/Savings/Investments/Income)
     // up front so the underlying structure is correct from minute one.
     const bracketIds = await ensureDefaultBracketsSeeded();
@@ -190,8 +205,6 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       currency,
       monthlyIncome,
     });
-    setSaving(false);
-    onDone();
   }
 
   return (
@@ -241,6 +254,19 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               <button className="btn" onClick={() => setStep(1)}>
                 Get started
               </button>
+              {/* Budgeting first is a lot to ask of someone who just wants
+                  to log a coffee. Skipping keeps the starter categories (no
+                  budgets) so there is somewhere to log straight away; budgets
+                  can be set any time from Settings. Same save path as the
+                  full setup, just with the optional steps left blank. */}
+              <button className="text-link" disabled={saving} onClick={finish}>
+                {saving ? "Setting up…" : "Skip setup, start logging"}
+              </button>
+              {saveError && (
+                <p role="alert" className="muted" style={{ marginTop: 8 }}>
+                  {saveError}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -286,9 +312,17 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               <button className="btn" onClick={() => setStep(2)}>
                 Continue
               </button>
+              <button className="text-link" disabled={saving} onClick={finish}>
+                {saving ? "Setting up…" : "Skip setup, start logging"}
+              </button>
               <button className="btn ghost" onClick={() => setStep(0)}>
                 Back
               </button>
+              {saveError && (
+                <p role="alert" className="muted" style={{ marginTop: 8 }}>
+                  {saveError}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -407,6 +441,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               <button className="btn" disabled={saving} onClick={finish}>
                 {saving ? "Setting up…" : "Start tracking"}
               </button>
+              {saveError && (
+                <p role="alert" className="muted" style={{ marginTop: 8 }}>
+                  {saveError}
+                </p>
+              )}
               <button className="btn ghost" onClick={() => setStep(2)}>
                 Back
               </button>

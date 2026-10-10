@@ -142,6 +142,12 @@ export interface Settings {
    *  or to anyone nearby, which is a real exposure for a private finance
    *  app that the in-app UI itself doesn't have. */
   hideWidgetAmounts?: boolean;
+  /** When a full backup was last exported (ms). Backups are the only safety
+   *  net — nothing syncs and Android auto-backup is off — so the app shows
+   *  this and reminds when it gets stale. */
+  lastBackupAt?: number;
+  /** Hides the dashboard backup reminder until this time (ms). 0 = not snoozed. */
+  backupNudgeSnoozedUntil?: number;
 }
 
 class MoneyMateDatabase extends Dexie {

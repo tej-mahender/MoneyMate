@@ -445,3 +445,71 @@ describe("Dashboard — month-end review prompt", () => {
     expect(screen.queryByText(/is wrapped up/)).not.toBeInTheDocument();
   });
 });
+
+describe("Dashboard — backup reminder", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  async function seedTransactions(n: number, enteredAt = Date.now() - 40 * DAY) {
+    const bracketId = await makeBracket("spend");
+    const catId = await db.categories.add({
+      name: "Food",
+      icon: "🍔",
+      color: "#F0B94D",
+      budget: 5000,
+      bracketId,
+    });
+    await db.transactions.bulkAdd(
+      Array.from({ length: n }, (_, i) => ({
+        type: "expense" as const,
+        amount: 10,
+        categoryId: catId,
+        date: todayISO(),
+        createdAt: enteredAt + i,
+      })),
+    );
+  }
+
+  it("stays out of the way until there is real data to lose", async () => {
+    await seedTransactions(2);
+    renderDashboard();
+    await screen.findByText("Budgeted");
+    expect(screen.queryByText("Back up your data")).not.toBeInTheDocument();
+  });
+
+  it("does not nag a new user who has never backed up while their data is recent", async () => {
+    await seedTransactions(6, Date.now() - 3 * DAY);
+    renderDashboard();
+    await screen.findByText("Budgeted");
+    expect(screen.queryByText("Back up your data")).not.toBeInTheDocument();
+  });
+
+  it("reminds a user who has never backed up once their data is over a month old", async () => {
+    await seedTransactions(6, Date.now() - 40 * DAY);
+    renderDashboard();
+    expect(await screen.findByText("Back up your data")).toBeInTheDocument();
+  });
+
+  it("is hidden after a recent backup", async () => {
+    await seedTransactions(6);
+    await db.settings.put({
+      id: 1, onboarded: true, currency: "₹", theme: "dark",
+      monthlyIncome: 0, carryForward: false, lastBackupAt: Date.now() - 2 * 86400000,
+    });
+    renderDashboard();
+    await screen.findByText("Budgeted");
+    expect(screen.queryByText("Back up your data")).not.toBeInTheDocument();
+  });
+
+  it('"Remind me later" hides it and the snooze is saved', async () => {
+    await seedTransactions(6);
+    const user = userEvent.setup();
+    renderDashboard();
+    await user.click(await screen.findByRole("button", { name: "Remind me later" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Back up your data")).not.toBeInTheDocument(),
+    );
+    const saved = await db.settings.get(1);
+    expect(saved?.backupNudgeSnoozedUntil ?? 0).toBeGreaterThan(Date.now());
+  });
+});

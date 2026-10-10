@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import {
@@ -27,6 +28,7 @@ import {
 import { todayISO, iconBadgeStyle, roundMoney } from "../lib/format";
 import { useUIStore } from "../store/useUIStore";
 import { clearWidget } from "../lib/widgetSync";
+import { describeBackupAge } from "../lib/backupNudge";
 import IconPicker from "../components/IconPicker";
 
 const PALETTE = [
@@ -55,9 +57,9 @@ export default function Settings({
   const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
   const showConfirm = useUIStore((s) => s.showConfirm);
-  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
-  const recurring = useLiveQuery(() => db.recurring.toArray(), []) ?? [];
+  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
+  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? EMPTY_LIST;
+  const recurring = useLiveQuery(() => db.recurring.toArray(), []) ?? EMPTY_LIST;
   const bracketById = new Map(brackets.map((b) => [b.id, b]));
   const activeBrackets = brackets.filter((b) => !b.archived);
   const archivedBrackets = brackets.filter((b) => b.archived);
@@ -182,13 +184,20 @@ export default function Settings({
 
   // Data management
   async function doExportJSON() {
-    await tryExport(async () =>
-      downloadFile(
+    await tryExport(async () => {
+      await downloadFile(
         `moneymate-backup-${todayISO()}.json`,
         await exportFullBackup(),
         "application/json",
-      ),
-    );
+      );
+      // Only reached if the file was actually handed off (downloadFile throws
+      // when the export or share fails), so "last backup" isn't set early.
+      const next = await updateSettings({
+        lastBackupAt: Date.now(),
+        backupNudgeSnoozedUntil: 0,
+      });
+      onSettingsChange(next);
+    });
   }
   async function doExportCSV() {
     await tryExport(async () =>
@@ -691,6 +700,10 @@ export default function Settings({
             Stored only in this browser, on this device. Nothing is ever sent to
             a server — export a backup regularly so you don't lose history if
             you clear browser data or switch devices.
+          </p>
+          <p className="muted" role="status">
+            Last backup:{" "}
+            <b>{describeBackupAge(settings.lastBackupAt, Date.now())}</b>
           </p>
           <button className="btn secondary" onClick={doExportJSON}>
             Export backup (.json)

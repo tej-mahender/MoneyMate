@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { db, computeMonthSummary } from "../db/db";
+import { db, computeMonthSummary, updateSettings } from "../db/db";
 import {
   fmtMoney,
   monthKey,
@@ -16,7 +17,8 @@ import {
 import CategoryRow from "../components/CategoryRow";
 import Ring from "../components/Ring";
 import MonthReview from "../components/MonthReview";
-import { Wallet, Receipt, ChevronLeft, ChevronRight, CalendarCheck, X } from "lucide-react";
+import { shouldNudgeBackup, snoozeUntil, oldestCreatedAt } from "../lib/backupNudge";
+import { Wallet, Receipt, ChevronLeft, ChevronRight, CalendarCheck, Save, X } from "lucide-react";
 
 // The Budget screen — capped spending categories only (Rent, Food,
 // Transport…), aggregated across every 'spend'-kind bracket (usually just
@@ -89,7 +91,7 @@ export default function Dashboard({ currency }: { currency: string }) {
       return cands.length ? cands.sort()[0] : curMonth;
     }, [curMonth]) ?? curMonth;
 
-  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
+  const brackets = useLiveQuery(() => db.brackets.toArray(), []) ?? EMPTY_LIST;
   const spendBracketIds = new Set(
     brackets.filter((b) => b.kind === "spend" && !b.archived).map((b) => b.id),
   );
@@ -99,7 +101,7 @@ export default function Dashboard({ currency }: { currency: string }) {
   const allocationBracketIds = new Set(
     brackets.filter((b) => b.kind === "allocation").map((b) => b.id),
   );
-  const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
   const categories = allCats.filter(
     (c) => !c.archived && spendBracketIds.has(c.bracketId),
   );
@@ -108,7 +110,7 @@ export default function Dashboard({ currency }: { currency: string }) {
       .filter((c) => allocationBracketIds.has(c.bracketId))
       .map((c) => c.id),
   );
-  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
+  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? EMPTY_LIST;
 
   const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
   // Excludes transactions logged against allocation categories (e.g. an
@@ -160,6 +162,25 @@ export default function Dashboard({ currency }: { currency: string }) {
   const ringState =
     budgetPctRaw < 75 ? "good" : budgetPctRaw < 100 ? "warn" : "over";
   const ringColor = `var(--${ringState === "warn" ? "gold" : ringState})`;
+
+  const txCount = useLiveQuery(() => db.transactions.count(), []);
+  const backupSettings = useLiveQuery(() => db.settings.get(1), []);
+  const showBackupNudge =
+    txCount !== undefined &&
+    shouldNudgeBackup({
+      transactionCount: txCount,
+      lastBackupAt: backupSettings?.lastBackupAt,
+      oldestDataAt: oldestCreatedAt(txs),
+      snoozedUntil: backupSettings?.backupNudgeSnoozedUntil,
+      now: Date.now(),
+    });
+  async function snoozeBackupNudge() {
+    try {
+      await updateSettings({ backupNudgeSnoozedUntil: snoozeUntil(Date.now()) });
+    } catch (err) {
+      console.warn("Couldn't snooze the backup reminder", err);
+    }
+  }
 
   return (
     <>
@@ -229,6 +250,28 @@ export default function Dashboard({ currency }: { currency: string }) {
               className="icon-btn"
               aria-label="Dismiss"
               onClick={dismissPrompt}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        {showBackupNudge && (
+          <div className="card review-prompt">
+            <Save size={20} className="review-prompt-icon" />
+            <div className="review-prompt-text">
+              <b>Back up your data</b>
+              <span className="muted">
+                It only lives on this phone. Export a backup so a reinstall or
+                lost phone doesn't wipe your history.
+              </span>
+            </div>
+            <button className="btn small" onClick={() => navigate("/settings")}>
+              Back up
+            </button>
+            <button
+              className="icon-btn"
+              aria-label="Remind me later"
+              onClick={snoozeBackupNudge}
             >
               <X size={16} />
             </button>

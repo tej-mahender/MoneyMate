@@ -206,21 +206,25 @@ export default function App() {
     return startWidgetSync();
   }, [dbReady]);
 
+  const theme = settings?.theme;
   useEffect(() => {
-    if (!settings) return;
+    if (!theme) return;
     const root = document.documentElement;
     const applied =
-      settings.theme === "system"
+      theme === "system"
         ? window.matchMedia("(prefers-color-scheme: light)").matches
           ? "light"
           : "dark"
-        : settings.theme;
+        : theme;
     root.setAttribute("data-theme", applied);
-  }, [settings?.theme]);
+  }, [theme]);
 
   if (bootError) {
     return (
-      <BootError message={bootError} onRetry={() => setAttempt((n) => n + 1)} />
+      <>
+        <BootError message={bootError} onRetry={() => setAttempt((n) => n + 1)} />
+        <Toast />
+      </>
     );
   }
 
@@ -232,15 +236,19 @@ export default function App() {
           <div className="skeleton" style={{ height: 170, marginBottom: 16 }} />
           <div className="skeleton" style={{ height: 230 }} />
         </div>
+        <Toast />
       </div>
     );
   }
 
   if (!settings.onboarded) {
     return (
-      <Suspense fallback={<RouteFallback />}>
-        <Onboarding onDone={async () => setSettings(await getSettings())} />
-      </Suspense>
+      <>
+        <Suspense fallback={<RouteFallback />}>
+          <Onboarding onDone={async () => setSettings(await getSettings())} />
+        </Suspense>
+        <Toast />
+      </>
     );
   }
 

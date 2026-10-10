@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("./db/db", async (importOriginal) => {
@@ -13,6 +13,7 @@ vi.mock("./db/db", async (importOriginal) => {
 
 import App from "./App";
 import { getSettings, processRecurring } from "./db/db";
+import { useUIStore } from "./store/useUIStore";
 
 const settings = {
   id: 1,
@@ -76,6 +77,32 @@ describe("App startup failures", () => {
     await user.click(await screen.findByRole("button", { name: "Reset app data" }));
     expect(
       screen.getByRole("button", { name: "Tap again to erase everything" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("App — toasts are visible before the main app shell exists", () => {
+  it("on the startup-failure screen", async () => {
+    vi.mocked(getSettings).mockRejectedValue(new Error("IDB blocked"));
+    render(<App />);
+    await screen.findByText("Couldn't open your data");
+
+    act(() => useUIStore.getState().showToast("Something went wrong. Please try again."));
+
+    expect(
+      await screen.findByText("Something went wrong. Please try again."),
+    ).toBeInTheDocument();
+  });
+
+  it("on the onboarding screen", async () => {
+    vi.mocked(getSettings).mockResolvedValue(settings); // onboarded: false
+    render(<App />);
+    await screen.findByText("Get started");
+
+    act(() => useUIStore.getState().showToast("Couldn't save that. Please try again."));
+
+    expect(
+      await screen.findByText("Couldn't save that. Please try again."),
     ).toBeInTheDocument();
   });
 });

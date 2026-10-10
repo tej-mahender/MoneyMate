@@ -787,7 +787,7 @@ function sanitizeSplitShares(
 
 function stripIds<T extends { id?: number }>(arr: T[]): T[] {
   return arr.map((item) => {
-    const { id, ...rest } = item;
+    const { id: _id, ...rest } = item;
     return rest as T;
   });
 }

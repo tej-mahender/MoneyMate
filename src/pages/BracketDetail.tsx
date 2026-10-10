@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db, type Category } from "../db/db";
@@ -49,7 +50,7 @@ export default function BracketDetail({
   const archivedCategories = categories.filter((c) => c.archived);
   const categoryIds = new Set(activeCategories.map((c) => c.id));
 
-  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
+  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? EMPTY_LIST;
   const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
   // The Income bracket's categories are logged as type 'income'; every
   // other bracket's categories are logged as type 'expense' — so which

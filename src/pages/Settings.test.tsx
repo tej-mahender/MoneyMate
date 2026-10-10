@@ -349,3 +349,45 @@ describe("Settings — Erase all data: widget and failure handling", () => {
     expect(clearWidget).not.toHaveBeenCalled();
   });
 });
+
+describe("Settings — backup tracking", () => {
+  it('shows "Never" until a backup is exported', async () => {
+    renderSettings();
+    expect(await screen.findByText("Never")).toBeInTheDocument();
+  });
+
+  it("records the time of a successful export and tells the app", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:test");
+    URL.revokeObjectURL = vi.fn();
+    const onSettingsChange = vi.fn();
+    const before = Date.now();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Settings settings={baseSettings} onSettingsChange={onSettingsChange} />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByText("Export backup (.json)"));
+
+    await vi.waitFor(async () => {
+      const saved = await db.settings.get(1);
+      expect(saved?.lastBackupAt).toBeGreaterThanOrEqual(before);
+    });
+    expect(onSettingsChange).toHaveBeenCalledWith(
+      expect.objectContaining({ lastBackupAt: expect.any(Number) }),
+    );
+  });
+
+  it("shows how long ago the last backup was", async () => {
+    render(
+      <MemoryRouter>
+        <Settings
+          settings={{ ...baseSettings, lastBackupAt: Date.now() - 5 * 86400000 }}
+          onSettingsChange={() => {}}
+        />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("5 days ago")).toBeInTheDocument();
+  });
+});

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useSearchParams } from "react-router-dom";
 import { db, type Transaction, type SplitShare } from "../db/db";
@@ -20,8 +21,8 @@ export default function History({ currency }: { currency: string }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const showToast = useUIStore((s) => s.showToast);
-  const allTx = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
-  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
+  const allTx = useLiveQuery(() => db.transactions.toArray(), []) ?? EMPTY_LIST;
+  const categories = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
   const requestedMonth = params.get("month");
@@ -83,7 +84,7 @@ export default function History({ currency }: { currency: string }) {
   async function undo() {
     if (!lastDeleted) return;
     const { transaction, shares } = lastDeleted;
-    const { id, ...rest } = transaction;
+    const { id: _id, ...rest } = transaction;
     const newId = await db.transactions.add(rest);
     if (shares.length) {
       await db.splitShares.bulkAdd(shares.map(({ id: _id, ...s }) => ({ ...s, transactionId: newId })));

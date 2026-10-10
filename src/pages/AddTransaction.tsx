@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { EMPTY_LIST } from "../lib/stable";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, type TxType, type SplitShare } from "../db/db";
@@ -40,8 +41,8 @@ export default function AddTransaction() {
     [editId],
   );
   const showToast = useUIStore((s) => s.showToast);
-  const allCategories = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const allBrackets = useLiveQuery(() => db.brackets.toArray(), []) ?? [];
+  const allCategories = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
+  const allBrackets = useLiveQuery(() => db.brackets.toArray(), []) ?? EMPTY_LIST;
   const bracketKindById = new Map(allBrackets.map((b) => [b.id, b.kind]));
   const bracketById = new Map(allBrackets.map((b) => [b.id, b]));
 
@@ -144,6 +145,9 @@ export default function AddTransaction() {
     const last = localStorage.getItem(`${RECENT_CAT_KEY}_${type}`);
     const found = last && categories.find((c) => c.id === Number(last));
     setCategoryId(found ? found.id! : categories[0].id!);
+    // Deliberately keyed on categories.length, not the array: re-running on
+    // every category edit would reset the category the person just picked.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [type, categories.length, editId]);
 
   // Valid split rows: a real name and a positive amount. Rows with a blank

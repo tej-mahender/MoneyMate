@@ -235,3 +235,68 @@ describe("capability — dividing income into brackets (step 2)", () => {
     expect(expenditureCats.reduce((s, c) => s + c.budget, 0)).toBe(20000);
   });
 });
+
+describe("capability — skip setup and start logging", () => {
+  it("from the welcome screen: finishes with starter categories (no budgets), default currency, and onboarded set", async () => {
+    const onDone = vi.fn();
+    const user = userEvent.setup();
+    render(<Onboarding onDone={onDone} />);
+
+    await user.click(await screen.findByText("Skip setup, start logging"));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    const settings = await getSettings();
+    expect(settings.onboarded).toBe(true);
+    expect(settings.currency).toBe("₹");
+    expect(await db.brackets.count()).toBe(4);
+    const cats = await db.categories.toArray();
+    expect(cats.length).toBeGreaterThan(0); // somewhere to log straight away
+    expect(cats.every((c) => c.budget === 0)).toBe(true);
+  });
+
+  it("is styled as a plain text link, not a button, on both steps", async () => {
+    const user = userEvent.setup();
+    render(<Onboarding onDone={vi.fn()} />);
+
+    const welcome = await screen.findByText("Skip setup, start logging");
+    expect(welcome).toHaveClass("text-link");
+    expect(welcome).not.toHaveClass("btn");
+
+    await user.click(screen.getByText("Get started"));
+    const context = await screen.findByText("Skip setup, start logging");
+    expect(context).toHaveClass("text-link");
+    expect(context).not.toHaveClass("btn");
+  });
+
+  it("from the context step: keeps the currency and income already entered", async () => {
+    const onDone = vi.fn();
+    const user = userEvent.setup();
+    render(<Onboarding onDone={onDone} />);
+
+    await user.click(await screen.findByText("Get started"));
+    await user.click(screen.getByRole("button", { name: "$" }));
+    await user.type(screen.getByPlaceholderText("0.00"), "50000");
+    await user.click(screen.getByText("Skip setup, start logging"));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    const settings = await getSettings();
+    expect(settings).toMatchObject({ onboarded: true, currency: "$", monthlyIncome: 50000 });
+  });
+
+  it("shows an error and stays on the screen when saving fails, instead of getting stuck", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spy = vi
+      .spyOn(db.categories, "bulkAdd")
+      .mockRejectedValueOnce(new Error("QuotaExceededError"));
+    const onDone = vi.fn();
+    const user = userEvent.setup();
+    render(<Onboarding onDone={onDone} />);
+
+    await user.click(await screen.findByText("Skip setup, start logging"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save your setup/i);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(screen.getByText("Skip setup, start logging")).not.toBeDisabled();
+    spy.mockRestore();
+  });
+});

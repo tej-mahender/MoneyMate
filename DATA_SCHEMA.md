@@ -3,9 +3,33 @@
 This app is built local-first, but every export uses a stable, documented schema
 specifically so it plugs into Power BI or a Python/pandas ML pipeline without any
 reshaping. This file is the data dictionary for those exports. `schemaVersion`
-(currently `5`) is included in the JSON backup and the ML dataset export — check
+(currently `7`) is included in the JSON backup and the ML dataset export — check
 it before assuming field names haven't changed if you're building an automated
 pipeline against this data.
+
+| Version | What changed                                                                       |
+| ------- | ---------------------------------------------------------------------------------- |
+| 7       | Added `budgetHistory` (per-category budget timeline) to the backup                 |
+| 6       | Added `splitShares` (split-expense / IOU tracking) to the backup                   |
+| ≤ 5     | Brackets, categories, transactions, recurring rules, settings                      |
+
+Both changes were additive: an older backup simply lacks the newer arrays, and
+restoring it is not an error. A backup from a **newer** version than the app is
+refused.
+
+**Which export contains what.** The full backup (`pfos-backup-*.json`) holds the
+raw tables: `brackets`, `categories`, `transactions`, `recurring`, `settings`,
+`splitShares`, `budgetHistory` (camelCase field names, as stored). The ML dataset
+(`pfos-ml-dataset-*.json`) is for analysis instead: enriched `transactions`
+(the PascalCase columns below), `categories`, `brackets`, `recurring` and
+`monthlySummary`, plus `currency` and `exportedAt`. It does **not** include
+`splitShares`, `budgetHistory` or `settings`.
+
+**Amounts.** Amounts are rounded to 2 decimal places when they are saved. Rows
+saved by older versions of the app can carry float noise (for example
+`0.19999999999999998`), so round `Amount` to 2 decimals when you load it. For a
+split expense, `Amount` is **your own share** only; what friends owe is in
+`splitShares`.
 
 ## The data model, in short
 
@@ -157,3 +181,42 @@ Per-category budget timeline so a closed month is reported against the cap that 
 | origin | `migrated` (existed when tracking began), `created` (did not exist before `month`), `edited` |
 
 A month's budget is the latest row with `month` <= that month. The current month always uses the live category value.
+
+## splitShares (backup schema v6)
+
+One row per friend's share of a split expense. The linked transaction records
+only *your own* share of the cost, so budgets and analytics are never inflated by
+money you'll get back.
+
+| Field         | Meaning                                                              |
+| ------------- | -------------------------------------------------------------------- |
+| id            | Primary key                                                          |
+| transactionId | The transaction this share belongs to (`transactions.id`)            |
+| personName    | Who owes you (free text)                                             |
+| amountOwed    | What they owe for this expense                                       |
+| amountSettled | How much they have paid back so far (`amountSettled <= amountOwed`)  |
+| createdAt     | Milliseconds since the Unix epoch when the share was created         |
+
+Outstanding balance for a person is the sum of `amountOwed - amountSettled`.
+Note that `transactionId` values are re-assigned when a backup is restored; the
+app remaps them for you, but an external pipeline should treat them as
+backup-local.
+
+## settings (backup only)
+
+A single row (`id` is always `1`).
+
+| Field                   | Meaning                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| onboarded               | Whether first-run setup has been completed                                      |
+| currency                | Currency symbol shown in the app, e.g. `₹`, `$`, `€`, `£`                       |
+| theme                   | `dark`, `light` or `system`                                                     |
+| monthlyIncome           | Expected monthly income, used for allocation percentages                        |
+| incomeSources           | Optional free-text note about income sources                                    |
+| carryForward            | Whether unspent budget rolls into the next month                                |
+| hideWidgetAmounts       | `true` masks amounts on the Android home-screen widget (the default)            |
+| lastBackupAt            | Milliseconds since the epoch of the last full-backup export; absent if never    |
+| backupNudgeSnoozedUntil | Hides the in-app backup reminder until this time; `0` means not snoozed         |
+
+`lastBackupAt` and `backupNudgeSnoozedUntil` describe reminder state on the
+device, not your finances; they are not restored from a backup.

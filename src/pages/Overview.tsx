@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { EMPTY_LIST } from "../lib/stable";
 import { useNavigate } from "react-router-dom";
 import { db, type Bracket, type BracketKind } from "../db/db";
 import {
@@ -44,8 +45,8 @@ export default function Overview({
   const brackets = (useLiveQuery(() => db.brackets.toArray(), []) ?? [])
     .filter((b) => !b.archived)
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.id! - b.id!);
-  const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? [];
-  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? [];
+  const allCats = useLiveQuery(() => db.categories.toArray(), []) ?? EMPTY_LIST;
+  const txs = useLiveQuery(() => db.transactions.toArray(), []) ?? EMPTY_LIST;
   const monthTx = txs.filter((t) => monthKey(t.date) === curMonth);
 
   const activeCats = allCats.filter((c) => !c.archived);
@@ -128,7 +129,7 @@ export default function Overview({
   // Not month-scoped like everything above — a debt from a dinner two
   // months ago is still owed today, so this deliberately looks at every
   // split share ever logged, not just this month's.
-  const splitShares = useLiveQuery(() => db.splitShares.toArray(), []) ?? [];
+  const splitShares = useLiveQuery(() => db.splitShares.toArray(), []) ?? EMPTY_LIST;
   const owedToYou = splitShares.reduce(
     (s, sh) => s + (sh.amountOwed - sh.amountSettled),
     0,

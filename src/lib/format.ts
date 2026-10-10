@@ -49,13 +49,33 @@ export function roundMoney(n: number): number {
   return r === 0 ? 0 : r; // never store -0
 }
 
+/** Digit-grouping locale for a currency symbol. ₹ keeps Indian lakh/crore
+ *  grouping (12,34,567); the others use the convention people with that
+ *  currency expect. € uses en-IE (comma grouping, point decimal) so the
+ *  symbol-first "€1,234.56" stays unambiguous. Unknown symbols keep the
+ *  app's original en-IN behaviour. */
+export function localeForCurrency(currency: string): string {
+  switch (currency) {
+    case "$":
+      return "en-US";
+    case "£":
+      return "en-GB";
+    case "€":
+      return "en-IE";
+    default:
+      return "en-IN";
+  }
+}
+
 export function fmtMoney(n: number, currency: string): string {
   const rounded = roundMoney(n);
   const sign = rounded < 0 ? "-" : "";
   return (
     sign +
     currency +
-    Math.abs(rounded).toLocaleString("en-IN", { maximumFractionDigits: 2 })
+    Math.abs(rounded).toLocaleString(localeForCurrency(currency), {
+      maximumFractionDigits: 2,
+    })
   );
 }
 
