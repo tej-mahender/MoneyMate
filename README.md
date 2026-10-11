@@ -12,7 +12,7 @@
 ![Offline](https://img.shields.io/badge/data-100%25_on--device-02214D)
 ![Network](https://img.shields.io/badge/cloud%20sync-none-041412)
 
-**[Try it live →](https://money-mate-mocha.vercel.app/)**
+**[Try it live →](https://moneymate-matcha.vercel.app/)**
 
 </div>
 
